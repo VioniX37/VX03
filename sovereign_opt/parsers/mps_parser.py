@@ -35,6 +35,10 @@ class MPSParser:
         ranges: Dict[str, float] = {}
         var_bounds: Dict[str, Tuple[float, float, VariableType]] = {}
         var_order: List[str] = []
+        quad_terms: Dict[Tuple[str, str], float] = {}
+        obj_offset = 0.0
+        obj_sense = ObjectiveSense.MINIMIZE
+        explicit_lower: set = set()
 
         is_integer_block = False
 
@@ -51,12 +55,21 @@ class MPSParser:
                 if header == "NAME":
                     model_name = parts[1] if len(parts) > 1 else "MPS_Model"
                     section = "NAME"
-                elif header in ("ROWS", "COLUMNS", "RHS", "RANGES", "BOUNDS", "QUADOBJ", "ENDATA"):
+                elif header == "OBJSENSE":
+                    section = "OBJSENSE"
+                    if len(parts) > 1 and parts[1].upper().startswith("MAX"):
+                        obj_sense = ObjectiveSense.MAXIMIZE
+                elif header in ("ROWS", "COLUMNS", "RHS", "RANGES", "BOUNDS", "QUADOBJ", "QMATRIX", "ENDATA"):
                     section = header
                 continue
 
             tokens = line.split()
             if not tokens or section is None:
+                continue
+
+            if section == "OBJSENSE":
+                if tokens[0].upper().startswith("MAX"):
+                    obj_sense = ObjectiveSense.MAXIMIZE
                 continue
 
             if section == "ROWS":
@@ -98,16 +111,30 @@ class MPSParser:
                         con_coeffs[r_name][col_name] = con_coeffs[r_name].get(col_name, 0.0) + val
 
             elif section == "RHS":
-                # Format: [RHS_NAME] Row1 Val1 [Row2 Val2]
-                # If first token is a row name or rhs id:
-                start_idx = 1 if tokens[0] in row_types or len(tokens) % 2 == 1 else 0
-                idx = start_idx
-                while idx < len(tokens):
+                # Format: [RHS_NAME] Row1 Val1 [Row2 Val2]; an odd token count means a set name is present
+                idx = 1 if len(tokens) % 2 == 1 else 0
+                while idx + 1 < len(tokens):
                     r_name = tokens[idx]
                     val = float(tokens[idx + 1])
                     idx += 2
-                    if r_name in row_types:
+                    if r_name == objective_name:
+                        # RHS on the objective row is the negated objective constant
+                        obj_offset = -val
+                    elif r_name in row_types:
                         rhs_values[r_name] = val
+
+            elif section in ("QUADOBJ", "QMATRIX"):
+                # Format: Col1 Col2 Value. QUADOBJ lists each off-diagonal once (lower triangle);
+                # QMATRIX lists both triangles. Objective term is 1/2 x^T Q x.
+                if len(tokens) >= 3:
+                    c1, c2, val = tokens[0], tokens[1], float(tokens[2])
+                    if c1 == c2:
+                        quad_terms[(c1, c1)] = quad_terms.get((c1, c1), 0.0) + val
+                    else:
+                        key = (c1, c2) if c1 <= c2 else (c2, c1)
+                        # model convention: coefficient q on (i,j) contributes 1/2 q x_i x_j
+                        weight = 2.0 if section == "QUADOBJ" else 1.0
+                        quad_terms[key] = quad_terms.get(key, 0.0) + weight * val
 
             elif section == "RANGES":
                 start_idx = 1 if len(tokens) % 2 == 1 else 0
@@ -134,8 +161,12 @@ class MPSParser:
 
                 if b_type == "UP":  # Upper bound
                     ub = val
+                    # MPS convention: a negative upper bound with default lower bound implies lb = -inf
+                    if val < 0 and lb == 0.0 and col_name not in explicit_lower:
+                        lb = float("-inf")
                 elif b_type == "LO":  # Lower bound
                     lb = val
+                    explicit_lower.add(col_name)
                 elif b_type == "FX":  # Fixed variable
                     lb = val
                     ub = val
@@ -189,5 +220,10 @@ class MPSParser:
                 sense_map = {"L": ConstraintSense.LE, "G": ConstraintSense.GE, "E": ConstraintSense.EQ}
                 model.add_constraint(name=r_name, coefficients=coeffs, sense=sense_map[r_type], rhs=rhs)
 
-        model.set_objective(linear_coefficients=obj_coeffs, sense=ObjectiveSense.MINIMIZE)
+        model.set_objective(
+            linear_coefficients=obj_coeffs,
+            sense=obj_sense,
+            quadratic_coefficients={k: v for k, v in quad_terms.items() if v != 0.0},
+            offset=obj_offset,
+        )
         return model

@@ -13,6 +13,27 @@ The solver is built **from mathematical first principles**. It does **not** wrap
 
 ---
 
+## 1.1 What's New in v2.0
+
+v2 is an accuracy and capability upgrade of the solver core. Every v1 defect below was reproduced, fixed, and locked in by a regression test.
+
+| Area | v1 behaviour (measured) | v2 behaviour (measured) |
+|---|---|---|
+| Free variables (`min x, x ≥ -50000`) | Simplex −10000, IPM 0, both labelled optimal | −50000 from every LP/QP solver, KKT-certified |
+| Presolve on maximization | Empty columns fixed at the wrong bound | Sense-normalized reductions; 150/150 randomized round trips correct |
+| Netlib AFIRO | Unbounded transcription; IPM diverged to −6e53 | Original MPS data; −464.7531428571 (error ≤ 1e-13) on all LP solvers |
+| MIQP | Sent to simplex (quadratic terms and integrality dropped) | Branch-and-bound over convex QP relaxations |
+| Refinery QP | Active set stopped at iteration cap (−5,889,292) | −5,903,161.066 certified optimal (IPM: 11 iters, active set: 26) |
+| Unit commitment | Gap reported wrong; crash beyond 4 periods | 4h / 8h / 24h proven optimal, gap 0 (24h: 0.18 s, 1 node) |
+| Solver statuses | Iteration limits relabelled "feasible" | Honest statuses; infeasible / unbounded certified |
+| Trust certificate | Feasibility only | Feasibility + optimality (KKT duals, strong duality, MIP bound) |
+
+Randomized verification during development (SciPy's HiGHS used only as a test oracle, never by the engine): 300/300 random LPs (simplex), 80/80 random MILPs (branch-and-cut), 120/120 random convex QPs (certified or independently confirmed infeasible/unbounded).
+
+**New algorithms:** bounded primal & dual simplex with LU/eta updates, Devex and dual steepest-edge pricing, Harris ratio tests; homogeneous self-dual IPM with crossover; convex QP interior point with active-set polishing; branch-and-cut with Gomory mixed-integer and knapsack cover cuts, reliability branching, diving / feasibility pump / RINS heuristics; presolve with activity analysis, forcing and parallel rows, doubleton aggregation, dominated and duplicate columns, coefficient tightening. Details: [`07_v2_engine_upgrades.md`](docs/theory/07_v2_engine_upgrades.md).
+
+---
+
 ## 2. End-to-End System Pipeline
 
 ```
@@ -56,9 +77,9 @@ The solver is built **from mathematical first principles**. It does **not** wrap
                                  ▼
   ┌─────────────────────────────────────────────────────────────┐
   │                    SOVEREIGN SOLVER CORE                    │
-  │  • LP:   Two-Phase Revised Simplex (Devex) & Primal-Dual IPM│
-  │  • MILP: Branch & Bound with LP relaxations & heuristics    │
-  │  • QP:   Active Set & KKT solvers for convex QP             │
+  │  • LP:   Bounded Primal/Dual Simplex & Homogeneous IPM      │
+  │  • MILP: Branch-and-Cut (GMI + cover cuts, reliability)     │
+  │  • QP:   Interior Point + Active Set; MIQP via B&B          │
   └──────────────────────────────┬──────────────────────────────┘
                                  │
                                  ▼
@@ -173,7 +194,15 @@ All mathematical formulations and proofs are documented in depth under [`docs/th
 
 ## 4. Workstation Dashboard & 6-Stage Workflow Visualization
 
-The Next.js demo interface has been built with an **industrial, precision technical workstation aesthetic** (inspired by mission-critical scientific instrumentation and Bloomberg/Palantir analytics platforms). It deliberately avoids generic "vibe-coded" neon bubbles, purple gradients, and rounded cards. Instead, it employs an **Obsidian Graphite (`#080b0f`) base**, hairline technical borders, monospace typography for all mathematical and numerical telemetry, and high information density.
+The Next.js dashboard is styled as a **terminal session**, because the product itself is a CLI:
+- **Status bars:** a status bar at the top and a vim-style mode line at the bottom.
+- **Prompt:** shows the exact `python -m sovereign_opt.cli.app ...` command for the current selection, with a copy button.
+- **Panels:** boxes with the title set into the border, the same look as the CLI's rich output.
+- **Run log:** prints the six pipeline stages line by line.
+- **Typography and color:** one monospace font (IBM Plex Mono), a warm dark ground, amber for prompts and selection, and green/red only for pass/fail.
+- **Text-mode visuals:** small matrices print as a `+ − ·` character grid, the branch-and-bound search prints like the `tree` command, and meters are ASCII bars.
+- **Keyboard:** `1`–`6` switch views, `ctrl+enter` runs, `j`/`k` move through problems.
+- **Motion:** respects `prefers-reduced-motion`.
 
 ### Complete 6-Stage End-to-End Workflow Visualizer
 
@@ -252,7 +281,13 @@ python -m sovereign_opt.cli.app solve path/to/model.mps --algorithm auto
 ```bash
 python -m pytest -v tests/
 ```
-All 11 unit and mathematical solver tests execute in $< 1.0$ second with 100% pass rate.
+The suite covers every v1 regression, randomized accuracy checks against brute force, closed-form KKT solutions and a HiGHS reference (test-only), presolve round trips, the MPS parser, and the REST API.
+
+### Option D: Run the Benchmark Suite
+```bash
+python -m benchmarks.run_benchmarks
+```
+Runs every instance with each applicable algorithm through presolve, solve, postsolve and the certificate, and exits non-zero if any run is not certified optimal.
 
 ---
 

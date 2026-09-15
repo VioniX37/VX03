@@ -1,20 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const mono = IBM_Plex_Mono({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-plex-mono",
 });
 
 export const metadata: Metadata = {
-  title: "SOVEREIGN OPTIMIZER // Precision Mathematical Computing Platform",
-  description: "AI-guided sovereign mathematical optimization engine with sparse-first linear algebra and independent trust verification.",
+  title: "sovereign · optimization workbench",
+  description: "Model, presolve, solve and independently certify LP, MILP, QP and MIQP problems.",
 };
 
 export default function RootLayout({
@@ -23,11 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
-    >
-      <body className="min-h-full flex flex-col bg-[#07090d] text-[#cbd5e1]">{children}</body>
+    <html lang="en" className={`${mono.variable} h-full`}>
+      <body className="min-h-full bg-bg text-fg antialiased">{children}</body>
     </html>
   );
 }

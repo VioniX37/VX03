@@ -2,7 +2,7 @@
 Sparse Matrix representations and sparse linear algebra operations.
 Implements Compressed Sparse Row (CSR) and Compressed Sparse Column (CSC) representations.
 """
-from typing import Tuple, List, Optional
+from typing import Tuple, Optional
 import numpy as np
 import scipy.sparse as sp
 
@@ -15,14 +15,14 @@ class SparseMatrix:
     """
 
     def __init__(self, mat: sp.spmatrix):
-        if sp.isspmatrix_csr(mat):
-            self._csr: sp.csr_matrix = mat
+        if sp.issparse(mat) and mat.format == "csr":
+            self._csr: Optional[sp.csr_matrix] = mat
             self._csc: Optional[sp.csc_matrix] = None
-        elif sp.isspmatrix_csc(mat):
-            self._csc: sp.csc_matrix = mat
-            self._csr: Optional[sp.csr_matrix] = None
+        elif sp.issparse(mat) and mat.format == "csc":
+            self._csc = mat
+            self._csr = None
         else:
-            self._csr = mat.tocsr()
+            self._csr = sp.csr_matrix(mat)
             self._csc = None
 
         self._shape: Tuple[int, int] = mat.shape
@@ -71,44 +71,30 @@ class SparseMatrix:
     def get_row(self, i: int) -> Tuple[np.ndarray, np.ndarray]:
         """Returns (col_indices, values) for row i."""
         csr = self.csr
-        start = csr.indptr[i]
-        end = csr.indptr[i + 1]
+        start, end = csr.indptr[i], csr.indptr[i + 1]
         return csr.indices[start:end], csr.data[start:end]
 
     def get_col(self, j: int) -> Tuple[np.ndarray, np.ndarray]:
         """Returns (row_indices, values) for col j."""
         csc = self.csc
-        start = csc.indptr[j]
-        end = csc.indptr[j + 1]
+        start, end = csc.indptr[j], csc.indptr[j + 1]
         return csc.indices[start:end], csc.data[start:end]
 
     def row_inf_norms(self) -> np.ndarray:
-        """Compute ||row_i||_infinity for all rows."""
-        csr = self.csr
-        norms = np.zeros(self.num_rows, dtype=np.float64)
-        for i in range(self.num_rows):
-            start = csr.indptr[i]
-            end = csr.indptr[i + 1]
-            if start < end:
-                norms[i] = np.max(np.abs(csr.data[start:end]))
-        return norms
+        """Compute ||row_i||_infinity for all rows (vectorized)."""
+        if self.nnz == 0:
+            return np.zeros(self.num_rows, dtype=np.float64)
+        return np.asarray(abs(self.csr).max(axis=1).todense(), dtype=np.float64).ravel()
 
     def col_inf_norms(self) -> np.ndarray:
-        """Compute ||col_j||_infinity for all columns."""
-        csc = self.csc
-        norms = np.zeros(self.num_cols, dtype=np.float64)
-        for j in range(self.num_cols):
-            start = csc.indptr[j]
-            end = csc.indptr[j + 1]
-            if start < end:
-                norms[j] = np.max(np.abs(csc.data[start:end]))
-        return norms
+        """Compute ||col_j||_infinity for all columns (vectorized)."""
+        if self.nnz == 0:
+            return np.zeros(self.num_cols, dtype=np.float64)
+        return np.asarray(abs(self.csc).max(axis=0).todense(), dtype=np.float64).ravel()
 
     def scale_rows_cols(self, d_row: np.ndarray, d_col: np.ndarray) -> "SparseMatrix":
         """
         Return new SparseMatrix: A_scaled = diag(d_row) * A * diag(d_col)
         """
-        D_r = sp.diags(d_row, shape=(self.num_rows, self.num_rows), format="csr")
-        D_c = sp.diags(d_col, shape=(self.num_cols, self.num_cols), format="csr")
-        scaled_csr = D_r.dot(self.csr).dot(D_c).tocsr()
-        return SparseMatrix(scaled_csr)
+        scaled = sp.diags(d_row) @ self.csr @ sp.diags(d_col)
+        return SparseMatrix(sp.csr_matrix(scaled))

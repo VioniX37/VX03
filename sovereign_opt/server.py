@@ -1,35 +1,40 @@
 """
-FastAPI REST backend service for the Sovereign Mathematical Optimization Engine.
-Connects the Sovereign Solver Core to the Next.js interactive demo frontend.
+FastAPI REST backend service for the Sovereign Mathematical Optimization Engine (v2).
+Connects the unified solve pipeline (sovereign_opt.solvers.dispatch) to the Next.js dashboard.
+
+All v1 response fields are preserved. v2 adds row duals, reduced costs, best bound,
+optimality-certificate details, the full presolve reduction breakdown, strategy notes,
+and per-stage timings. Responses are sanitized so non-finite floats never break JSON.
 """
-from typing import Dict, List, Optional, Tuple, Any
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+import math
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import time
-import numpy as np
 
-from sovereign_opt.model.model import OptimizationModel
-from sovereign_opt.model.variable import VariableType
+from sovereign_opt import __version__
+from sovereign_opt.model.model import OptimizationModel, ModelValidationError
 from sovereign_opt.parsers.mps_parser import MPSParser
 from sovereign_opt.parsers.lp_parser import LPParser
-from sovereign_opt.presolve.presolver import Presolver, PresolveStats
+from sovereign_opt.presolve.presolver import Presolver, PresolveStats, PresolveInfeasibleError, PresolveUnboundedError
 from sovereign_opt.ml.strategy import MLStrategyEngine
-from sovereign_opt.solvers.lp.simplex import RevisedSimplexSolver
-from sovereign_opt.solvers.lp.interior_point import InteriorPointSolver
-from sovereign_opt.solvers.milp.branch_bound import BranchAndBoundSolver
-from sovereign_opt.solvers.qp.active_set import ActiveSetQPSolver
-from sovereign_opt.solvers.base import SolverResult, SolverStatus
-from sovereign_opt.validation.validator import IndependentValidator
+from sovereign_opt.ml.features import FeatureExtractor
+from sovereign_opt.solvers.dispatch import solve_model, ALL_ALGORITHMS
 from sovereign_opt.runtime.device import DeviceDetector
+from sovereign_opt.sparse.scaling import RuizScaling
+from sovereign_opt.sparse.matrix import SparseMatrix
 from benchmarks.netlib.afiro import build_netlib_afiro
 from benchmarks.industrial.refinery_blending import build_refinery_blending_model
 from benchmarks.industrial.power_dispatch import build_unit_commitment_model
+from benchmarks.industrial.portfolio_selection import build_portfolio_selection_model
 
 app = FastAPI(
     title="Sovereign Optimizer API",
     description="Backend API serving the AI-guided sovereign optimization engine.",
-    version="0.1.0",
+    version=__version__,
 )
 
 # Enable CORS for Next.js development server
@@ -45,20 +50,106 @@ app.add_middleware(
 CURRENT_MODEL: Optional[OptimizationModel] = None
 CURRENT_PRESOLVE: Optional[Tuple[OptimizationModel, Any, PresolveStats]] = None
 
+PRESETS: Dict[str, dict] = {
+    "netlib_afiro": {
+        "builder": build_netlib_afiro,
+        "name": "Netlib Benchmark: AFIRO",
+        "category": "Linear Programming (Netlib)",
+        "description": "Standard Netlib LP benchmark built from the original MPS data. 27 constraints, 32 variables. Known optimal: -464.7531.",
+        "problem_class": "LP",
+    },
+    "refinery_blending_lp": {
+        "builder": lambda: build_refinery_blending_model(as_qp=False),
+        "name": "Refinery Crude Blending (LP)",
+        "category": "Industrial Production",
+        "description": "Refinery feedstock blending with octane & sulfur constraints to maximize product revenues.",
+        "problem_class": "LP",
+    },
+    "refinery_blending_qp": {
+        "builder": lambda: build_refinery_blending_model(as_qp=True),
+        "name": "Refinery Crude Blending (QP)",
+        "category": "Industrial Production (Quadratic)",
+        "description": "Refinery blending with quadratic penalties on heavy crude feedstock usage.",
+        "problem_class": "QP",
+    },
+    "power_unit_commitment": {
+        "builder": lambda: build_unit_commitment_model(time_periods=4),
+        "name": "Power Grid Unit Commitment (MILP)",
+        "category": "Energy & Utilities",
+        "description": "Hourly generator scheduling with on/off binary commitment decisions and demand balance.",
+        "problem_class": "MILP",
+    },
+    "power_unit_commitment_24h": {
+        "builder": lambda: build_unit_commitment_model(time_periods=24),
+        "name": "Power Grid Unit Commitment, 24h (MILP)",
+        "category": "Energy & Utilities",
+        "description": "Full-day commitment schedule: 96 binaries, 96 dispatch variables, 216 constraints.",
+        "problem_class": "MILP",
+    },
+    "portfolio_miqp": {
+        "builder": build_portfolio_selection_model,
+        "name": "Cardinality-Constrained Portfolio (MIQP)",
+        "category": "Finance (Mixed-Integer Quadratic)",
+        "description": "Mean-variance portfolio with binary asset selection, minimum position sizes and a cardinality limit.",
+        "problem_class": "MIQP",
+    },
+}
+
 
 class PresetRequest(BaseModel):
     preset_id: str
 
 
 class SolveRequest(BaseModel):
-    algorithm: Optional[str] = "auto"  # 'auto', 'simplex', 'interior_point', 'branch_and_bound', 'active_set'
+    algorithm: Optional[str] = "auto"  # see sovereign_opt.solvers.dispatch.ALL_ALGORITHMS
     enable_presolve: bool = True
     time_limit_seconds: float = 60.0
 
 
+def _json_safe(obj: Any) -> Any:
+    """Convert numpy scalars / arrays and enums to JSON types; non-finite floats become null."""
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return _json_safe(obj.tolist())
+    if isinstance(obj, (bool, np.bool_)):
+        return bool(obj)
+    if isinstance(obj, (int, np.integer)):
+        return int(obj)
+    if isinstance(obj, (float, np.floating)):
+        value = float(obj)
+        return value if math.isfinite(value) else None
+    if isinstance(obj, Enum):
+        return obj.value
+    return obj
+
+
+def _ui_tree_trace(trace: List[dict]) -> List[dict]:
+    """The dashboard renders bounds with toFixed(): show the parent's bound for infeasible subproblems."""
+    bounds = {t["node_id"]: t.get("lower_bound") for t in trace}
+    out = []
+    for t in trace:
+        entry = dict(t)
+        value = entry.get("lower_bound")
+        if value is None or not math.isfinite(value):
+            parent = bounds.get(entry.get("parent_id"))
+            entry["lower_bound"] = parent if (parent is not None and math.isfinite(parent)) else 0.0
+            entry["bound_note"] = "infeasible subproblem (parent bound shown)"
+        out.append(entry)
+    return out
+
+
+def _require_model() -> OptimizationModel:
+    if CURRENT_MODEL is None:
+        raise HTTPException(status_code=400, detail="No model loaded.")
+    return CURRENT_MODEL
+
+
 @app.get("/")
 def read_root():
-    return {"status": "online", "engine": "Sovereign Mathematical Optimizer", "version": "0.1.0"}
+    return {"status": "online", "engine": "Sovereign Mathematical Optimizer", "version": __version__}
 
 
 @app.get("/api/system_info")
@@ -69,46 +160,15 @@ def get_system_info():
         "has_cuda": info.has_cuda,
         "cuda_device_name": info.cuda_device_name,
         "preferred_device": info.preferred_device,
+        "engine_version": __version__,
+        "algorithms": list(ALL_ALGORITHMS),
     }
 
 
 @app.get("/api/presets")
 def list_presets():
-    return [
-        {
-            "id": "netlib_afiro",
-            "name": "Netlib Benchmark: AFIRO",
-            "category": "Linear Programming (Netlib)",
-            "description": "Standard Netlib LP benchmark instance. 27 variables, 32 constraints. Known optimal: -464.753.",
-            "problem_class": "LP",
-        },
-        {
-            "id": "refinery_blending_lp",
-            "name": "Refinery Crude Blending (LP)",
-            "category": "Industrial Production",
-            "description": "Refinery feedstock blending with octane & sulfur constraints to maximize product revenues.",
-            "problem_class": "LP",
-        },
-        {
-            "id": "refinery_blending_qp",
-            "name": "Refinery Crude Blending (QP)",
-            "category": "Industrial Production (Quadratic)",
-            "description": "Refinery blending with quadratic penalties on heavy crude feedstock usage.",
-            "problem_class": "QP",
-        },
-        {
-            "id": "power_unit_commitment",
-            "name": "Power Grid Unit Commitment (MILP)",
-            "category": "Energy & Utilities",
-            "description": "Hourly generator scheduling with on/off binary commitment decisions and demand balance.",
-            "problem_class": "MILP",
-        },
-    ]
+    return [{"id": pid, **{k: v for k, v in meta.items() if k != "builder"}} for pid, meta in PRESETS.items()]
 
-
-from sovereign_opt.sparse.scaling import RuizScaling
-from sovereign_opt.sparse.matrix import SparseMatrix
-from sovereign_opt.ml.features import FeatureExtractor
 
 def extract_model_response(model: OptimizationModel) -> dict:
     meta = model.get_metadata()
@@ -116,34 +176,28 @@ def extract_model_response(model: OptimizationModel) -> dict:
     c = np.array([model.objective.linear_coefficients.get(v, 0.0) for v in model.variable_names], dtype=np.float64)
     coo = A_csr.tocoo()
 
-    # Calculate Ruiz equilibration scaling metrics
     ruiz = RuizScaling(max_iterations=10)
     try:
-        sp_mat = SparseMatrix(A_csr.data.copy(), A_csr.indices.copy(), A_csr.indptr.copy(), A_csr.shape)
-        A_scaled, scaled_c, _, _, _, _ = ruiz.fit_transform(sp_mat, c, r_lb, r_ub, c_lb, c_ub)
-        d1_min, d1_max = float(np.min(ruiz.d1)), float(np.max(ruiz.d1))
-        d2_min, d2_max = float(np.min(ruiz.d2)), float(np.max(ruiz.d2))
+        A_scaled, _, _, _, _, _ = ruiz.fit_transform(SparseMatrix(A_csr), c, r_lb, r_ub, c_lb, c_ub)
         ruiz_stats = {
-            "d1_min": round(d1_min, 4),
-            "d1_max": round(d1_max, 4),
-            "d2_min": round(d2_min, 4),
-            "d2_max": round(d2_max, 4),
-            "norm_before": round(float(np.max(np.abs(A_csr.data))), 4) if len(A_csr.data) > 0 else 1.0,
-            "norm_after": round(float(np.max(np.abs(A_scaled.data))), 4) if len(A_scaled.data) > 0 else 1.0,
-            "iterations": 10,
+            "d1_min": round(float(np.min(ruiz.d1)), 4) if ruiz.d1.size else 1.0,
+            "d1_max": round(float(np.max(ruiz.d1)), 4) if ruiz.d1.size else 1.0,
+            "d2_min": round(float(np.min(ruiz.d2)), 4) if ruiz.d2.size else 1.0,
+            "d2_max": round(float(np.max(ruiz.d2)), 4) if ruiz.d2.size else 1.0,
+            "norm_before": round(float(np.max(np.abs(A_csr.data))), 4) if A_csr.nnz else 1.0,
+            "norm_after": round(float(np.max(np.abs(A_scaled.csr.data))), 4) if A_scaled.nnz else 1.0,
+            "iterations": int(ruiz.iterations_run),
         }
-    except Exception as e:
-        ruiz_stats = {
-            "d1_min": 1.0, "d1_max": 1.0, "d2_min": 1.0, "d2_max": 1.0,
-            "norm_before": 1.0, "norm_after": 1.0, "iterations": 0
-        }
+    except Exception:
+        ruiz_stats = {"d1_min": 1.0, "d1_max": 1.0, "d2_min": 1.0, "d2_max": 1.0,
+                      "norm_before": 1.0, "norm_after": 1.0, "iterations": 0}
 
     sparsity_sample = [
-        {"row": int(r), "col": int(c), "val": round(float(v), 4)}
-        for r, c, v in zip(coo.row[:600], coo.col[:600], coo.data[:600])
+        {"row": int(r), "col": int(cc), "val": round(float(v), 4)}
+        for r, cc, v in zip(coo.row[:600], coo.col[:600], coo.data[:600])
     ]
 
-    return {
+    return _json_safe({
         "name": meta.name,
         "problem_class": meta.problem_class,
         "num_variables": meta.num_variables,
@@ -166,70 +220,53 @@ def extract_model_response(model: OptimizationModel) -> dict:
             for v in list(model.variables.values())[:30]
         ],
         "constraints": [
-            {
-                "name": c.name,
-                "sense": c.sense.value,
-                "rhs": c.rhs,
-                "num_terms": len(c.coefficients),
-            }
-            for c in list(model.constraints.values())[:30]
+            {"name": con.name, "sense": con.sense.value, "rhs": con.rhs, "num_terms": len(con.coefficients)}
+            for con in list(model.constraints.values())[:30]
         ],
-    }
+    })
 
 
 @app.post("/api/load_preset")
 def load_preset(req: PresetRequest):
     global CURRENT_MODEL, CURRENT_PRESOLVE
-    CURRENT_PRESOLVE = None
-
-    if req.preset_id == "netlib_afiro":
-        model = build_netlib_afiro()
-    elif req.preset_id == "refinery_blending_lp":
-        model = build_refinery_blending_model(as_qp=False)
-    elif req.preset_id == "refinery_blending_qp":
-        model = build_refinery_blending_model(as_qp=True)
-    elif req.preset_id == "power_unit_commitment":
-        model = build_unit_commitment_model(time_periods=4)
-    else:
+    if req.preset_id not in PRESETS:
         raise HTTPException(status_code=400, detail=f"Unknown preset ID: {req.preset_id}")
-
-    CURRENT_MODEL = model
-    return extract_model_response(model)
+    CURRENT_PRESOLVE = None
+    CURRENT_MODEL = PRESETS[req.preset_id]["builder"]()
+    return extract_model_response(CURRENT_MODEL)
 
 
 @app.post("/api/upload_model")
 async def upload_model(file: UploadFile = File(...)):
     global CURRENT_MODEL, CURRENT_PRESOLVE
-    CURRENT_PRESOLVE = None
-
     contents = (await file.read()).decode("utf-8", errors="replace")
-    filename = file.filename.lower()
-
+    filename = (file.filename or "").lower()
     try:
-        if filename.endswith(".mps") or "NAME" in contents[:50]:
+        if filename.endswith((".mps", ".qps")) or "NAME" in contents[:50]:
             model = MPSParser.parse_string(contents)
         else:
             model = LPParser.parse_string(contents)
-    except Exception as e:
+        model.validate()
+    except (ModelValidationError, ValueError, IndexError, KeyError) as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(e)}")
-
+    CURRENT_PRESOLVE = None
     CURRENT_MODEL = model
     return extract_model_response(model)
 
 
 @app.post("/api/presolve")
 def run_presolve():
-    global CURRENT_MODEL, CURRENT_PRESOLVE
-    if CURRENT_MODEL is None:
-        raise HTTPException(status_code=400, detail="No model loaded.")
-
-    presolver = Presolver()
-    p_model, mapper, stats = presolver.presolve(CURRENT_MODEL)
+    global CURRENT_PRESOLVE
+    model = _require_model()
+    try:
+        p_model, mapper, stats = Presolver().presolve(model)
+    except PresolveInfeasibleError as e:
+        raise HTTPException(status_code=422, detail=f"Presolve proved the model infeasible: {e}")
+    except PresolveUnboundedError as e:
+        raise HTTPException(status_code=422, detail=f"Presolve found an unbounded direction: {e}")
     CURRENT_PRESOLVE = (p_model, mapper, stats)
-
     fixed_list = [{"name": k, "value": round(float(v), 6)} for k, v in list(mapper.fixed_vars.items())[:20]]
-
-    return {
+    return _json_safe({
         "original_vars": stats.original_vars,
         "original_cons": stats.original_cons,
         "original_nnz": stats.original_nnz,
@@ -243,22 +280,26 @@ def run_presolve():
         "singleton_rows_count": stats.singleton_rows_count,
         "empty_rows_count": stats.empty_rows_count,
         "empty_cols_count": stats.empty_cols_count,
+        "redundant_rows_count": stats.redundant_rows_count,
+        "forcing_rows_count": stats.forcing_rows_count,
+        "doubleton_eliminations": stats.doubleton_eliminations,
+        "dominated_cols_count": stats.dominated_cols_count,
+        "parallel_rows_count": stats.parallel_rows_count,
+        "duplicate_cols_count": stats.duplicate_cols_count,
+        "tightened_bounds_count": stats.tightened_bounds_count,
+        "coefficient_tightenings": stats.coefficient_tightenings,
+        "presolve_passes": stats.passes,
         "fixed_vars_list": fixed_list,
-    }
+    })
 
 
 @app.post("/api/ml_recommend")
 def get_ml_recommendation():
-    global CURRENT_MODEL, CURRENT_PRESOLVE
-    if CURRENT_MODEL is None:
-        raise HTTPException(status_code=400, detail="No model loaded.")
-
+    model = _require_model()
     stats = CURRENT_PRESOLVE[2] if CURRENT_PRESOLVE else None
-    ml_engine = MLStrategyEngine()
-    rec = ml_engine.recommend(CURRENT_MODEL, stats)
-    raw_features = FeatureExtractor.extract(CURRENT_MODEL, stats)
-
-    return {
+    rec = MLStrategyEngine().recommend(model, stats)
+    raw_features = FeatureExtractor.extract(model, stats)
+    return _json_safe({
         "recommended_algorithm": rec.recommended_algorithm,
         "algorithm_probabilities": rec.algorithm_probabilities,
         "confidence_score": round(rec.confidence_score * 100, 1),
@@ -266,154 +307,122 @@ def get_ml_recommendation():
         "branching_strategy": rec.branching_strategy,
         "feature_attributions": rec.feature_attributions,
         "deterministic_fallback": rec.deterministic_fallback,
+        "cut_strategy": rec.cut_strategy,
+        "heuristic_intensity": rec.heuristic_intensity,
+        "relaxation_solver": rec.relaxation_solver,
         "features": {k: round(float(v), 4) for k, v in raw_features.items()},
-    }
+    })
 
 
 @app.post("/api/solve")
-def solve_model(req: SolveRequest):
-    global CURRENT_MODEL, CURRENT_PRESOLVE
-    if CURRENT_MODEL is None:
-        raise HTTPException(status_code=400, detail="No model loaded.")
+def solve(req: SolveRequest):
+    global CURRENT_PRESOLVE
+    model = _require_model()
+    algorithm = req.algorithm or "auto"
+    if algorithm not in ALL_ALGORITHMS:
+        raise HTTPException(status_code=400, detail=f"Unknown algorithm '{algorithm}'. Choose from {list(ALL_ALGORITHMS)}.")
+    try:
+        outcome = solve_model(
+            model,
+            algorithm=algorithm,
+            enable_presolve=req.enable_presolve,
+            time_limit_seconds=req.time_limit_seconds,
+            presolve_result=CURRENT_PRESOLVE if req.enable_presolve else None,
+        )
+    except ModelValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    if req.enable_presolve and CURRENT_PRESOLVE is None and outcome.presolved_model is not None:
+        CURRENT_PRESOLVE = (outcome.presolved_model, outcome.mapper, outcome.presolve_stats)
 
-    model_to_solve = CURRENT_MODEL
-    mapper = None
-    presolve_stats = None
+    result, cert, stats, mapper = outcome.result, outcome.certificate, outcome.presolve_stats, outcome.mapper
+    core = outcome.core_result
 
-    if req.enable_presolve:
-        if CURRENT_PRESOLVE is None:
-            presolver = Presolver()
-            p_model, p_mapper, p_stats = presolver.presolve(CURRENT_MODEL)
-            CURRENT_PRESOLVE = (p_model, p_mapper, p_stats)
-        model_to_solve, mapper, presolve_stats = CURRENT_PRESOLVE
-
-    # Determine algorithm
-    algo = req.algorithm
-    ml_engine = MLStrategyEngine()
-    ml_rec = ml_engine.recommend(CURRENT_MODEL, presolve_stats)
-    if algo == "auto":
-        algo = ml_rec.recommended_algorithm
-
-    # Instantiate selected solver
-    p_class = model_to_solve.classify()
-    if p_class == "MILP" or algo == "branch_and_bound":
-        solver = BranchAndBoundSolver(time_limit_seconds=req.time_limit_seconds)
-    elif p_class == "QP" or algo == "active_set":
-        solver = ActiveSetQPSolver()
-    elif algo == "interior_point":
-        solver = InteriorPointSolver()
-    else:
-        # Default to Revised Simplex
-        solver = RevisedSimplexSolver()
-
-    # Execute solve
-    start_time = time.time()
-    result: SolverResult = solver.solve(model_to_solve, time_limit_seconds=req.time_limit_seconds)
-    solve_time = time.time() - start_time
-
-    # Postsolve reconstruction if presolve was used
-    final_primal = dict(result.primal_solution)
     mapping_sample = []
-    if mapper is not None and result.is_feasible:
-        x_full = mapper.restore_primal(result.primal_solution)
-        final_primal = {name: float(x_full[i]) for i, name in enumerate(mapper.original_var_names)}
-        for v_name in mapper.original_var_names[:40]:
-            if v_name in mapper.fixed_vars:
-                st = "FIXED_IN_PRESOLVE"
-            elif v_name in result.primal_solution:
-                st = "OPTIMIZED_IN_CORE"
-            else:
-                st = "CANONICAL_RESTORED"
-            mapping_sample.append({
-                "variable": v_name,
-                "value": round(float(final_primal.get(v_name, 0.0)), 6),
-                "resolution_state": st,
-            })
+    for v_name in model.variable_names[:40]:
+        if mapper is None:
+            state = "DIRECT_SOLVE"
+        elif v_name in mapper.fixed_vars:
+            state = "FIXED_IN_PRESOLVE"
+        elif v_name in mapper.eliminated_vars:
+            state = "ELIMINATED_" + mapper.eliminated_vars[v_name].upper()
+        elif v_name in core.primal_solution:
+            state = "OPTIMIZED_IN_CORE"
+        else:
+            state = "CANONICAL_RESTORED"
+        mapping_sample.append({
+            "variable": v_name,
+            "value": round(float(result.primal_solution.get(v_name, 0.0)), 6),
+            "resolution_state": state,
+        })
+
+    diagnostics = dict(result.diagnostics)
+    if "tree_trace" in diagnostics:
+        diagnostics["tree_trace"] = _ui_tree_trace(diagnostics["tree_trace"])
+
+    meta = model.get_metadata()
+    rec = outcome.recommendation
+    solve_ms = outcome.timings.get("solve", 0.0) * 1000.0
+    core_summary = f"{result.status.value} in {result.iterations} iters ({solve_ms:.1f}ms)"
+    if result.nodes_explored:
+        core_summary += f", {result.nodes_explored} nodes, {diagnostics.get('cuts_applied', 0)} cuts"
+    if cert.status == "NO_SOLUTION_TO_VERIFY":
+        audit_status = "NO_SOLUTION"
     else:
-        for v_name, val in list(final_primal.items())[:40]:
-            mapping_sample.append({
-                "variable": v_name,
-                "value": round(float(val), 6),
-                "resolution_state": "DIRECT_SOLVE",
-            })
+        audit_status = "CERTIFIED" if cert.is_valid else "FAILED"
+    audit_summary = f"{cert.status}: primal viol {cert.max_primal_violation:.1e}, bounds viol {cert.max_bound_violation:.1e}"
+    if cert.max_dual_violation is not None:
+        audit_summary += f", dual viol {cert.max_dual_violation:.1e}"
+    if cert.duality_gap is not None:
+        audit_summary += f", gap {cert.duality_gap:.1e}"
 
-    final_result = SolverResult(
-        status=result.status,
-        objective_value=result.objective_value,
-        primal_solution=final_primal,
-        iterations=result.iterations,
-        runtime_seconds=solve_time,
-        nodes_explored=result.nodes_explored,
-        mip_gap=result.mip_gap,
-        diagnostics=result.diagnostics,
-    )
-
-    # Independent mathematical verification
-    validator = IndependentValidator()
-    certificate = validator.verify(CURRENT_MODEL, final_result)
-
-    # Workflow stage summaries
-    model_meta = CURRENT_MODEL.get_metadata()
     workflow_stages = [
-        {
-            "stage": 1,
-            "name": "Formulation & Topology",
-            "status": "COMPLETED",
-            "summary": f"{CURRENT_MODEL.num_variables} vars, {CURRENT_MODEL.num_constraints} cons, {model_meta.num_nonzeros} nnz",
-        },
-        {
-            "stage": 2,
-            "name": "Presolve Reductions",
-            "status": "COMPLETED" if req.enable_presolve and presolve_stats else "BYPASS",
-            "summary": f"-{presolve_stats.var_reduction_pct:.1f}% vars, -{presolve_stats.con_reduction_pct:.1f}% cons" if presolve_stats else "Presolve bypassed",
-        },
-        {
-            "stage": 3,
-            "name": "AI Meta-Strategy",
-            "status": "COMPLETED",
-            "summary": f"Selected {solver.name} ({round(ml_rec.confidence_score * 100, 1)}% confidence)",
-        },
-        {
-            "stage": 4,
-            "name": "Sovereign Core Solve",
-            "status": "COMPLETED",
-            "summary": f"{final_result.status.value} in {final_result.iterations} iters ({solve_time*1000:.1f}ms)",
-        },
-        {
-            "stage": 5,
-            "name": "Postsolve Reconstruction",
-            "status": "COMPLETED" if mapper else "BYPASS",
-            "summary": f"Restored {len(final_primal)} variables into canonical space",
-        },
-        {
-            "stage": 6,
-            "name": "Independent Trust Audit",
-            "status": "CERTIFIED" if certificate.is_valid else "FAILED",
-            "summary": f"Primal viol {certificate.max_primal_violation:.1e}, Bounds viol {certificate.max_bound_violation:.1e}",
-        },
+        {"stage": 1, "name": "Formulation & Topology", "status": "COMPLETED",
+         "summary": f"{model.num_variables} vars, {model.num_constraints} cons, {meta.num_nonzeros} nnz ({outcome.problem_class})"},
+        {"stage": 2, "name": "Presolve Reductions", "status": "COMPLETED" if stats else "BYPASS",
+         "summary": (f"-{stats.var_reduction_pct:.1f}% vars, -{stats.con_reduction_pct:.1f}% cons, "
+                     f"{stats.doubleton_eliminations} aggregations, {stats.forcing_rows_count} forcing rows") if stats else "Presolve bypassed"},
+        {"stage": 3, "name": "AI Meta-Strategy", "status": "COMPLETED",
+         "summary": f"Selected {outcome.solver_name} ({round(rec.confidence_score * 100, 1)}% confidence)"
+                    + (f"; {len(outcome.notes)} note(s)" if outcome.notes else "")},
+        {"stage": 4, "name": "Sovereign Core Solve", "status": "COMPLETED", "summary": core_summary},
+        {"stage": 5, "name": "Postsolve Reconstruction", "status": "COMPLETED" if mapper else "BYPASS",
+         "summary": f"Restored {len(result.primal_solution)} variables; duals: {diagnostics.get('dual_recovery', 'from core solver' if result.dual_solution else 'n/a')}"},
+        {"stage": 6, "name": "Independent Trust Audit", "status": audit_status, "summary": audit_summary},
     ]
 
-    return {
-        "status": final_result.status.value,
-        "objective_value": final_result.objective_value,
-        "iterations": final_result.iterations,
-        "runtime_seconds": round(final_result.runtime_seconds, 4),
-        "nodes_explored": final_result.nodes_explored,
-        "mip_gap": final_result.mip_gap,
-        "algorithm_used": solver.name,
-        "primal_solution": {k: round(v, 6) for k, v in list(final_result.primal_solution.items())[:60]},
-        "diagnostics": final_result.diagnostics,
+    response = {
+        "status": result.status.value,
+        "objective_value": result.objective_value,
+        "iterations": result.iterations,
+        "runtime_seconds": round(outcome.timings.get("total", result.runtime_seconds), 4),
+        "nodes_explored": result.nodes_explored,
+        "mip_gap": result.mip_gap,
+        "best_bound": result.best_bound,
+        "algorithm_used": outcome.solver_name,
+        "algorithm_key": outcome.algorithm,
+        "problem_class": outcome.problem_class,
+        "primal_solution": {k: round(v, 6) for k, v in list(result.primal_solution.items())[:60]},
+        "dual_solution": {k: round(v, 6) for k, v in list(result.dual_solution.items())[:60]},
+        "reduced_costs": {k: round(v, 6) for k, v in list(result.reduced_costs.items())[:60]},
+        "diagnostics": diagnostics,
         "postsolve_mapping": mapping_sample,
         "workflow_stages": workflow_stages,
+        "notes": outcome.notes,
+        "timings": {k: round(v, 5) for k, v in outcome.timings.items()},
         "trust_certificate": {
-            "is_valid": certificate.is_valid,
-            "status": certificate.status,
-            "max_primal_violation": certificate.max_primal_violation,
-            "max_bound_violation": certificate.max_bound_violation,
-            "max_integrality_violation": certificate.max_integrality_violation,
-            "recomputed_objective": certificate.recomputed_objective,
-            "objective_difference": certificate.objective_difference,
-            "checks": certificate.checks,
-            "violation_details": certificate.violation_details,
+            "is_valid": cert.is_valid,
+            "status": cert.status,
+            "max_primal_violation": cert.max_primal_violation,
+            "max_bound_violation": cert.max_bound_violation,
+            "max_integrality_violation": cert.max_integrality_violation,
+            "recomputed_objective": cert.recomputed_objective,
+            "objective_difference": cert.objective_difference,
+            "checks": cert.checks,
+            "violation_details": cert.violation_details,
+            "optimality_certified": cert.optimality_certified,
+            "optimality_method": cert.optimality_method,
+            "max_dual_violation": cert.max_dual_violation,
+            "duality_gap": cert.duality_gap,
         },
     }
+    return _json_safe(response)
