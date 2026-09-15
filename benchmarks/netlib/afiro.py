@@ -1,74 +1,104 @@
 """
 Netlib LP Benchmark Instance: AFIRO.
-Known optimal objective value: -464.75314286.
-32 constraints, 27 variables, 83 nonzeros.
+Known optimal objective value: -464.7531428571.
+27 constraints, 32 variables, 83 constraint nonzeros.
+
+v1 shipped a hand-typed transcription that was unbounded. v2 embeds the original
+Netlib MPS data verbatim and builds the model with the sovereign MPS parser.
 """
 from sovereign_opt.model.model import OptimizationModel
-from sovereign_opt.model.constraint import ConstraintSense
-from sovereign_opt.model.objective import ObjectiveSense
+from sovereign_opt.parsers.mps_parser import MPSParser
+
+AFIRO_OPTIMAL_OBJECTIVE = -464.7531428571
+
+AFIRO_MPS = """\
+NAME          AFIRO
+ROWS
+ E  R09
+ E  R10
+ L  X05
+ L  X21
+ E  R12
+ E  R13
+ L  X17
+ L  X18
+ L  X19
+ L  X20
+ E  R19
+ E  R20
+ L  X27
+ L  X44
+ E  R22
+ E  R23
+ L  X40
+ L  X41
+ L  X42
+ L  X43
+ L  X45
+ L  X46
+ L  X47
+ L  X48
+ L  X49
+ L  X50
+ L  X51
+ N  COST
+COLUMNS
+    X01       X48               .301   R09                -1.
+    X01       R10              -1.06   X05                 1.
+    X02       X21                -1.   R09                 1.
+    X02       COST               -.4
+    X03       X46                -1.   R09                 1.
+    X04       X50                 1.   R10                 1.
+    X06       X49               .301   R12                -1.
+    X06       R13              -1.06   X17                 1.
+    X07       X49               .313   R12                -1.
+    X07       R13              -1.06   X18                 1.
+    X08       X49               .313   R12                -1.
+    X08       R13               -.96   X19                 1.
+    X09       X49               .326   R12                -1.
+    X09       R13               -.86   X20                 1.
+    X10       X45              2.364   X17                -1.
+    X11       X45              2.386   X18                -1.
+    X12       X45              2.408   X19                -1.
+    X13       X45              2.429   X20                -1.
+    X14       X21                1.4   R12                 1.
+    X14       COST              -.32
+    X15       X47                -1.   R12                 1.
+    X16       X51                 1.   R13                 1.
+    X22       X46               .109   R19                -1.
+    X22       R20               -.43   X27                 1.
+    X23       X44                -1.   R19                 1.
+    X23       COST               -.6
+    X24       X48                -1.   R19                 1.
+    X25       X45                -1.   R19                 1.
+    X26       X50                 1.   R20                 1.
+    X28       X47               .109   R22               -.43
+    X28       R23                 1.   X40                 1.
+    X29       X47               .108   R22               -.43
+    X29       R23                 1.   X41                 1.
+    X30       X47               .108   R22               -.39
+    X30       R23                 1.   X42                 1.
+    X31       X47               .107   R22               -.37
+    X31       R23                 1.   X43                 1.
+    X32       X45              2.191   X40                -1.
+    X33       X45              2.219   X41                -1.
+    X34       X45              2.249   X42                -1.
+    X35       X45              2.279   X43                -1.
+    X36       X44                1.4   R23                -1.
+    X36       COST              -.48
+    X37       X49                -1.   R23                 1.
+    X38       X51                 1.   R22                 1.
+    X39       R23                 1.   COST               10.
+RHS
+    B         X50               310.   X51               300.
+    B         X05                80.   X17                80.
+    B         X27               500.   R23                44.
+    B         X40               500.
+ENDATA
+"""
 
 
 def build_netlib_afiro() -> OptimizationModel:
-    model = OptimizationModel(name="AFIRO")
-
-    # Variables
-    vars_info = [
-        ("X01", 0.0, float("inf")), ("X02", 0.0, float("inf")), ("X03", 0.0, float("inf")),
-        ("X04", 0.0, float("inf")), ("X06", 0.0, float("inf")), ("X07", 0.0, float("inf")),
-        ("X08", 0.0, float("inf")), ("X09", 0.0, float("inf")), ("X10", 0.0, float("inf")),
-        ("X11", 0.0, float("inf")), ("X12", 0.0, float("inf")), ("X13", 0.0, float("inf")),
-        ("X14", 0.0, float("inf")), ("X15", 0.0, float("inf")), ("X16", 0.0, float("inf")),
-        ("X17", 0.0, float("inf")), ("X18", 0.0, float("inf")), ("X19", 0.0, float("inf")),
-        ("X20", 0.0, float("inf")), ("X21", 0.0, float("inf")), ("X22", 0.0, float("inf")),
-        ("X23", 0.0, float("inf")), ("X24", 0.0, float("inf")), ("X27", 0.0, float("inf")),
-        ("X28", 0.0, float("inf")), ("X29", 0.0, float("inf")), ("X40", 0.0, float("inf")),
-    ]
-    for v_name, lb, ub in vars_info:
-        model.add_variable(name=v_name, lower_bound=lb, upper_bound=ub)
-
-    # Constraints
-    cons_data = [
-        ("R09", {"X01": -1.0, "X02": 1.0}, ConstraintSense.LE, 0.0),
-        ("R10", {"X03": -1.0, "X04": 1.0}, ConstraintSense.LE, 0.0),
-        ("X05", {"X01": 1.0, "X03": 1.0}, ConstraintSense.EQ, 80.0),
-        ("R12", {"X06": -1.0, "X07": 1.0}, ConstraintSense.LE, 0.0),
-        ("R13", {"X08": -1.0, "X09": 1.0}, ConstraintSense.LE, 0.0),
-        ("X21_con", {"X06": 1.0, "X08": 1.0}, ConstraintSense.EQ, 80.0),
-        ("R14", {"X02": 1.0, "X04": 1.0, "X10": -1.0}, ConstraintSense.EQ, 0.0),
-        ("R15", {"X07": 1.0, "X09": 1.0, "X11": -1.0}, ConstraintSense.EQ, 0.0),
-        ("R16", {"X10": -0.4, "X11": -0.32, "X12": 1.0}, ConstraintSense.EQ, 0.0),
-        ("R17", {"X10": 1.0, "X13": -1.0}, ConstraintSense.EQ, 0.0),
-        ("R18", {"X11": 1.0, "X14": -1.0}, ConstraintSense.EQ, 0.0),
-        ("R19", {"X12": -1.0, "X15": 1.0}, ConstraintSense.LE, 0.0),
-        ("R20", {"X12": -1.0, "X16": 1.0}, ConstraintSense.LE, 0.0),
-        ("X22_con", {"X13": 1.0, "X14": 1.0}, ConstraintSense.LE, 500.0),
-        ("R21", {"X15": 1.0, "X17": -1.0}, ConstraintSense.EQ, 0.0),
-        ("R22", {"X16": 1.0, "X18": -1.0}, ConstraintSense.EQ, 0.0),
-        ("R23", {"X17": 1.0, "X19": -1.0}, ConstraintSense.EQ, 0.0),
-        ("R24", {"X18": 1.0, "X20": -1.0}, ConstraintSense.EQ, 0.0),
-        ("R25", {"X19": -1.0, "X21": 1.0}, ConstraintSense.LE, 0.0),
-        ("R26", {"X20": -1.0, "X22": 1.0}, ConstraintSense.LE, 0.0),
-        ("X23_con", {"X21": 1.0, "X22": 1.0}, ConstraintSense.LE, 500.0),
-        ("R27", {"X23": 1.0, "X24": -1.0}, ConstraintSense.EQ, 0.0),
-        ("R28", {"X24": 1.0, "X27": -1.0}, ConstraintSense.EQ, 0.0),
-        ("R29", {"X27": -1.0, "X28": 1.0}, ConstraintSense.LE, 0.0),
-        ("X25_con", {"X28": 1.0}, ConstraintSense.LE, 300.0),
-        ("R30", {"X29": 1.0, "X40": -1.0}, ConstraintSense.EQ, 0.0),
-        ("X26_con", {"X40": 1.0}, ConstraintSense.LE, 44.0),
-    ]
-
-    for name, coeffs, sense, rhs in cons_data:
-        model.add_constraint(name=name, coefficients=coeffs, sense=sense, rhs=rhs)
-
-    # Objective: Minimize
-    obj_coeffs = {
-        "X01": 0.4, "X02": 0.0, "X03": 0.4, "X04": 0.0,
-        "X06": 0.32, "X07": 0.0, "X08": 0.32, "X09": 0.0,
-        "X10": -0.6, "X11": -0.48, "X12": 10.0, "X13": 0.0,
-        "X14": 0.0, "X15": -10.0, "X16": -10.0, "X17": 0.0,
-        "X18": 0.0, "X19": -10.0, "X20": -10.0, "X21": 0.0,
-        "X22": 0.0, "X23": 0.0, "X24": 0.0, "X27": -10.0,
-        "X28": 0.0, "X29": -10.0, "X40": 0.0,
-    }
-    model.set_objective(linear_coefficients=obj_coeffs, sense=ObjectiveSense.MINIMIZE)
+    model = MPSParser.parse_string(AFIRO_MPS)
+    model.name = "AFIRO"
     return model

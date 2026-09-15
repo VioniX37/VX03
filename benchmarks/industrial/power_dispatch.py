@@ -3,6 +3,8 @@ Industrial Benchmark: Power Generation Unit Commitment (MILP).
 Schedules thermal generators with on/off binary commitment states, minimum generation,
 and maximum capacity to meet hourly electricity demand at minimum total cost.
 """
+import math
+
 from sovereign_opt.model.model import OptimizationModel
 from sovereign_opt.model.variable import VariableType
 from sovereign_opt.model.constraint import ConstraintSense
@@ -20,8 +22,14 @@ def build_unit_commitment_model(time_periods: int = 4) -> OptimizationModel:
         "Gen_Hydro_Flex": {"min_mw": 10.0, "max_mw": 200.0, "cost": 15.0, "startup": 100.0},
     }
 
-    # Demand across time periods (MW)
-    demand = [450.0, 680.0, 850.0, 520.0][:time_periods]
+    # Demand across time periods (MW): the original 4-hour profile, extended by a
+    # deterministic daily load curve (450-800 MW) for longer horizons.
+    base_profile = [450.0, 680.0, 850.0, 520.0]
+    demand = [
+        base_profile[t] if t < len(base_profile)
+        else round(450.0 + 350.0 * (0.5 - 0.5 * math.cos(2.0 * math.pi * t / 24.0)), 1)
+        for t in range(time_periods)
+    ]
 
     obj_coeffs = {}
 
