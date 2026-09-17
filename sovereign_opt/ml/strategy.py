@@ -37,6 +37,34 @@ def _sigmoid(v: float) -> float:
     return float(1.0 / (1.0 + np.exp(-v)))
 
 
+_SELECTOR_CACHE: Dict[str, object] = {}
+
+
+def _learned_lp_choice(features: Dict[str, float]):
+    """Apply the selector trained by benchmarks/train_selector.py (sovereign_opt/ml/lp_selector.json)."""
+    import json
+    import os
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lp_selector.json")
+    if "model" not in _SELECTOR_CACHE:
+        try:
+            with open(path) as f:
+                _SELECTOR_CACHE["model"] = json.load(f)
+        except (OSError, ValueError):
+            _SELECTOR_CACHE["model"] = None
+    sel = _SELECTOR_CACHE["model"]
+    if not sel:
+        return None
+    try:
+        x = (np.array([features[k] for k in sel["features"]]) - np.array(sel["mean"])) / np.array(sel["std"])
+        z = np.array(sel["weights"]) @ np.append(x, 1.0)
+        p = np.exp(z - z.max())
+        p /= p.sum()
+    except (KeyError, ValueError):
+        return None
+    j = int(np.argmax(p))
+    return {a: float(v) for a, v in zip(sel["algorithms"], p)}, sel["algorithms"][j], float(p[j])
+
+
 class MLStrategyEngine:
     """
     Local, sovereign ML strategy model.
@@ -99,11 +127,21 @@ class MLStrategyEngine:
             algo_probs = {"simplex": 1.0 - prob_ipm, "interior_point": prob_ipm}
             rec_algo = "simplex" if prob_ipm <= 0.5 else "interior_point"
             confidence = max(prob_ipm, 1.0 - prob_ipm)
-            fallback = "simplex"
+            fallback = "dual_simplex"
             attributions["matrix_density"] = density
             attributions["problem_scale_nnz"] = log_nnz
             attributions["aspect_ratio"] = aspect
             attributions["condition_estimate"] = cond
+
+            learned = _learned_lp_choice(features)
+            if learned is not None:
+                algo_probs, rec_algo, confidence = learned
+                attributions["learned_selector"] = 1.0
+            if model.num_variables > 250_000:
+                # Factorization-based methods run out of time/memory here; first-order PDLP only needs SpMV.
+                rec_algo, confidence = "pdlp", 0.9
+                algo_probs = {**{k: 0.0 for k in algo_probs}, "pdlp": 1.0}
+                attributions["very_large_lp"] = float(model.num_variables)
 
         raw_nnz = model.get_metadata().num_nonzeros
         if raw_nnz > 25000 and features["density"] > 0.02:

@@ -16,12 +16,16 @@ import {
   statusLabel,
   statusTone,
 } from "./_components/views";
+import { BenchmarksView } from "./_components/bench";
 
 const METHODS = [
   { value: "auto", label: "auto (engine picks)" },
   { value: "simplex", label: "simplex          lp" },
   { value: "dual_simplex", label: "dual_simplex     lp" },
   { value: "interior_point", label: "interior_point   lp" },
+  { value: "pdlp", label: "pdlp (gpu-ready)  lp" },
+  { value: "hybrid_pdlp", label: "hybrid_pdlp      lp" },
+  { value: "concurrent", label: "concurrent (multi-core race)" },
   { value: "branch_and_bound", label: "branch_and_bound milp, miqp" },
   { value: "qp_interior_point", label: "qp_interior_point qp" },
   { value: "active_set", label: "active_set       qp" },
@@ -37,6 +41,11 @@ const VIEWS: Array<{ id: ViewId; label: string }> = [
 ];
 
 const CLASS_ORDER = ["LP", "QP", "MILP", "MIQP"];
+
+// demo models first (grouped by class), then the public benchmark library (grouped by collection)
+const isLibrary = (p: Preset) => p.id.includes("/");
+const groupLabel = (p: Preset) => (isLibrary(p) ? p.category.toLowerCase() : p.problem_class.toLowerCase());
+const groupRank = (p: Preset) => (isLibrary(p) ? 10 : 0) + Math.max(0, CLASS_ORDER.indexOf(p.problem_class));
 
 type Busy = null | "load" | "presolve" | "recommend" | "solve";
 
@@ -65,7 +74,9 @@ export default function Workbench() {
   const [lastCommand, setLastCommand] = useState("");
 
   const [view, setView] = useState<ViewId>(1);
+  const [page, setPage] = useState<"workbench" | "benchmarks">("workbench");
   const [algorithm, setAlgorithm] = useState("auto");
+  const [timeLimit, setTimeLimit] = useState("60");
   const [enablePresolve, setEnablePresolve] = useState(true);
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +84,7 @@ export default function Workbench() {
   const fetchedFor = useRef(new Set<string>());
 
   const ordered = useMemo(
-    () => [...presets].sort((a, b) => CLASS_ORDER.indexOf(a.problem_class) - CLASS_ORDER.indexOf(b.problem_class)),
+    () => [...presets].sort((a, b) => groupRank(a) - groupRank(b)),
     [presets],
   );
 
@@ -117,7 +128,7 @@ export default function Workbench() {
       .then((list) => {
         if (cancelled) return;
         setPresets(list);
-        const sorted = [...list].sort((a, b) => CLASS_ORDER.indexOf(a.problem_class) - CLASS_ORDER.indexOf(b.problem_class));
+        const sorted = [...list].sort((a, b) => groupRank(a) - groupRank(b));
         const index = Math.max(0, sorted.findIndex((p) => p.id === "refinery_blending_lp"));
         setCursor(index);
         if (sorted[index]) void loadPreset(sorted[index].id);
@@ -187,7 +198,7 @@ export default function Workbench() {
     setError(null);
     setLastCommand(command);
     try {
-      const r = await api.solve(algorithm, enablePresolve);
+      const r = await api.solve(algorithm, enablePresolve, Number(timeLimit));
       setResult(r);
       setRunId((n) => n + 1);
       setView(4);
@@ -201,7 +212,7 @@ export default function Workbench() {
     } finally {
       setBusy(null);
     }
-  }, [model, busy, algorithm, enablePresolve, command]);
+  }, [model, busy, algorithm, enablePresolve, command, timeLimit]);
 
   const openView = useCallback(
     (next: ViewId) => {
@@ -230,7 +241,7 @@ export default function Workbench() {
         void solve();
         return;
       }
-      if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (typing || e.ctrlKey || e.metaKey || e.altKey || page !== "workbench") return;
       if (e.key >= "1" && e.key <= "6") {
         openView(Number(e.key) as ViewId);
       } else if (e.key === "j") {
@@ -244,7 +255,7 @@ export default function Workbench() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [solve, openView, ordered, cursor, selected, loadPreset]);
+  }, [solve, openView, ordered, cursor, selected, loadPreset, page]);
 
   const copyCommand = () => {
     void navigator.clipboard?.writeText(command).then(() => {
@@ -268,6 +279,20 @@ export default function Workbench() {
           <span className="text-amber">sovereign</span>
           <span className="text-faint">{systemInfo?.engine_version ? `v${systemInfo.engine_version}` : ""}</span>
           <span className="text-faint">│</span>
+          <span className="flex gap-1" role="tablist" aria-label="page">
+            {(["workbench", "benchmarks"] as const).map((p) => (
+              <button
+                key={p}
+                role="tab"
+                aria-selected={page === p}
+                onClick={() => setPage(p)}
+                className={`px-1.5 ${page === p ? "bg-fg text-bg" : "text-dim hover:text-fg"}`}
+              >
+                {p}
+              </button>
+            ))}
+          </span>
+          <span className="text-faint">│</span>
           <span className={online === null ? "text-dim" : online ? "text-green" : "text-red"}>
             ● {online === null ? "connecting" : online ? "api online" : "api offline"}
           </span>
@@ -278,11 +303,16 @@ export default function Workbench() {
         </div>
       </header>
 
+      {page === "benchmarks" ? (
+        <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 pb-10 pt-7 sm:px-6">
+          <BenchmarksView />
+        </main>
+      ) : (
       <main className="mx-auto grid w-full max-w-[1360px] flex-1 gap-6 px-4 pb-10 pt-7 sm:px-6 lg:grid-cols-[250px_minmax(0,1fr)]">
         {/* problem list */}
         <aside className="lg:sticky lg:top-16 lg:self-start">
           <Panel title="problems">
-            <ul aria-label="problems" className="-mx-1 text-[13.5px]">
+            <ul aria-label="problems" className="-mx-1 max-h-[62vh] overflow-y-auto text-[13.5px]">
               {presets.length === 0 && online !== false ? (
                 <li className="px-1 text-dim">
                   <Spinner /> loading
@@ -290,10 +320,12 @@ export default function Workbench() {
               ) : null}
               {ordered.map((p, i) => {
                 const active = p.id === selected;
-                const newGroup = i === 0 || ordered[i - 1].problem_class !== p.problem_class;
+                const newGroup = i === 0 || groupLabel(ordered[i - 1]) !== groupLabel(p);
+                const firstLibrary = isLibrary(p) && (i === 0 || !isLibrary(ordered[i - 1]));
                 return (
                   <li key={p.id}>
-                    {newGroup ? <p className={`px-1 text-[12px] text-faint ${i === 0 ? "" : "mt-2.5"}`}># {p.problem_class.toLowerCase()}</p> : null}
+                    {firstLibrary ? <p className="mt-4 border-t border-line px-1 pt-3 text-[12px] text-amber">public benchmark library</p> : null}
+                    {newGroup ? <p className={`px-1 text-[12px] text-faint ${i === 0 ? "" : "mt-2.5"}`}># {groupLabel(p)}</p> : null}
                     <button
                       title={p.name}
                       onClick={() => {
@@ -306,7 +338,7 @@ export default function Workbench() {
                       }`}
                     >
                       <span className={active ? "text-bg" : "text-amber"}>{active ? ">" : cursor === i ? "·" : " "}</span>
-                      <span className="truncate">{p.id}</span>
+                      <span className="truncate">{isLibrary(p) ? p.id.split("/")[1] : p.id}</span>
                     </button>
                   </li>
                 );
@@ -350,6 +382,19 @@ export default function Workbench() {
               <span className="flex items-center gap-2 text-[13.5px] text-dim">
                 method
                 <Select label="method" value={algorithm} onChange={setAlgorithm} options={METHODS} />
+              </span>
+              <span className="flex items-center gap-2 text-[13.5px] text-dim">
+                limit
+                <Select
+                  label="time limit"
+                  value={timeLimit}
+                  onChange={setTimeLimit}
+                  options={[
+                    { value: "60", label: "60 s" },
+                    { value: "300", label: "5 min" },
+                    { value: "900", label: "15 min" },
+                  ]}
+                />
               </span>
               <Toggle checked={enablePresolve} onChange={setEnablePresolve} label="presolve" />
               <span className="flex-1" />
@@ -427,6 +472,7 @@ export default function Workbench() {
           </div>
         </div>
       </main>
+      )}
 
       {/* mode line */}
       <footer className="sticky bottom-0 z-40 border-t border-line bg-bg/95 backdrop-blur-sm">

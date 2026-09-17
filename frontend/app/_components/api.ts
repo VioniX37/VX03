@@ -1,4 +1,4 @@
-import type { MLRecommendation, ModelMetadata, Preset, PresolveData, SolveResult, SystemInfo } from "./types";
+import type { Benchmarks, MLRecommendation, ModelMetadata, Preset, PresolveData, SolveResult, SystemInfo } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
@@ -37,6 +37,7 @@ export const api = {
     form.append("file", file);
     return request<ModelMetadata>("/api/upload_model", { method: "POST", body: form });
   },
+  benchmarks: () => request<Benchmarks>("/api/benchmarks"),
   presolve: () => request<PresolveData>("/api/presolve", { method: "POST" }),
   recommend: () => request<MLRecommendation>("/api/ml_recommend", { method: "POST" }),
   solve: (algorithm: string, enablePresolve: boolean, timeLimitSeconds = 60) =>

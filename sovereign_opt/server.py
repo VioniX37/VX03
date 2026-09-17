@@ -30,6 +30,8 @@ from benchmarks.netlib.afiro import build_netlib_afiro
 from benchmarks.industrial.refinery_blending import build_refinery_blending_model
 from benchmarks.industrial.power_dispatch import build_unit_commitment_model
 from benchmarks.industrial.portfolio_selection import build_portfolio_selection_model
+from benchmarks.industrial.supply_chain import build_supply_chain_model
+from benchmarks.instances import NOTES
 
 app = FastAPI(
     title="Sovereign Optimizer API",
@@ -86,6 +88,14 @@ PRESETS: Dict[str, dict] = {
         "description": "Full-day commitment schedule: 96 binaries, 96 dispatch variables, 216 constraints.",
         "problem_class": "MILP",
     },
+    "supply_chain_lp": {
+        "builder": lambda: build_supply_chain_model(target_vars=3000),
+        "name": "Production-Distribution Network (LP)",
+        "category": "Supply Chain & Logistics",
+        "description": "Plants -> warehouses -> customers, 4 products. Same generator scales to millions of variables "
+                       "(python -m benchmarks.scale).",
+        "problem_class": "LP",
+    },
     "portfolio_miqp": {
         "builder": build_portfolio_selection_model,
         "name": "Cardinality-Constrained Portfolio (MIQP)",
@@ -94,6 +104,64 @@ PRESETS: Dict[str, dict] = {
         "problem_class": "MIQP",
     },
 }
+
+
+PRESETS["supply_chain_lp_50k"] = {
+    "builder": lambda: build_supply_chain_model(target_vars=50_000),
+    "name": "Production-Distribution Network, 50k variables (LP)",
+    "category": "Supply Chain & Logistics",
+    "description": "Same generator at 50,000 variables. Try methods pdlp, hybrid_pdlp or concurrent. "
+                   "Millions of variables: python -m benchmarks.scale.",
+    "problem_class": "LP",
+}
+
+
+def _register_benchmark_library():
+    """Expose every downloaded public benchmark instance (benchmarks/data) as a loadable problem."""
+    import glob
+    import json
+    import os
+    from benchmarks.instances import SUITES, get_instance, mps_path
+
+    sizes: Dict[str, tuple] = {}
+    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "benchmarks", "results")
+    for path in sorted(glob.glob(os.path.join(folder, "*.json"))):
+        try:
+            with open(path) as f:
+                for r in json.load(f).get("rows", []):
+                    if r.get("key") and r.get("cols"):
+                        sizes[r["key"]] = (r.get("rows"), r.get("cols"), r.get("published_optimum"))
+        except (OSError, ValueError, AttributeError):
+            continue
+
+    groups = [("netlib", "LP", "Netlib LP"), ("netlib-large", "LP", "Netlib LP (large) / Kennington"),
+              ("infeas", "LP", "Netlib infeasible LP"), ("qp", "QP", "Maros-Meszaros QP"),
+              ("qp-large", "QP", "Maros-Meszaros QP (large)"), ("miplib", "MILP", "MIPLIB 2017")]
+    for suite, pclass, label in groups:
+        for key in SUITES[suite]:
+            inst = get_instance(key)
+            if not os.path.exists(inst.path):
+                continue
+            rows, cols, opt = sizes.get(key, (None, None, inst.published_optimum))
+            parts = [f"{label} instance from the official collection file, parsed by the sovereign MPS parser."]
+            if rows:
+                parts.append(f"{rows} constraints, {cols} variables.")
+            if inst.expected_status == "infeasible":
+                parts.append("Known to be infeasible: the engine must prove it.")
+            elif opt is not None:
+                parts.append(f"Published optimum: {opt:.10g}.")
+            if inst.tags:
+                parts.append("Hard because: " + ", ".join(inst.tags) + ".")
+            PRESETS[f"{inst.collection}/{inst.name}"] = {
+                "builder": (lambda i=inst: MPSParser.parse_file(mps_path(i))),
+                "name": f"{label}: {inst.name}",
+                "category": label,
+                "description": " ".join(parts),
+                "problem_class": pclass,
+            }
+
+
+_register_benchmark_library()
 
 
 class PresetRequest(BaseModel):
@@ -312,6 +380,59 @@ def get_ml_recommendation():
         "relaxation_solver": rec.relaxation_solver,
         "features": {k: round(float(v), 4) for k, v in raw_features.items()},
     })
+
+
+BENCH_KINDS = ("netlib", "netlib-large", "infeas", "miplib", "qp", "qp-large", "robustness", "scale")
+
+
+def _latest_results() -> Dict[str, Any]:
+    """Most recent saved result file per benchmark kind (benchmarks/results/<kind>_<stamp>.json)."""
+    import glob
+    import json
+    import os
+    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "benchmarks", "results")
+    out: Dict[str, Any] = {}
+    for path in sorted(glob.glob(os.path.join(folder, "*.json"))):
+        name = os.path.basename(path)[:-5]
+        kind = name.rsplit("_", 1)[0]
+        if kind.split("_")[0] not in BENCH_KINDS:  # also tagged runs, e.g. netlib_kaggle_gpu_hybrid
+            continue
+        out[kind] = path  # sorted by timestamp, so the last one wins
+    data = {}
+    for kind, path in out.items():
+        with open(path) as f:
+            data[kind] = json.load(f)
+        data[kind]["file"] = os.path.basename(path)
+    return data
+
+
+@app.get("/api/benchmarks")
+def benchmarks():
+    """Saved public-benchmark results (ours vs HiGHS), robustness report and scaling runs."""
+    data = _latest_results()
+    slim = {}
+    for kind, d in data.items():
+        rows = []
+        for r in d.get("rows", []):
+            if kind.startswith("scale"):
+                rows.append(r)
+                continue
+            o, h = r.get("ours") or {}, r.get("highs") or {}
+            dg = o.get("diagnostics") or {}
+            rows.append({
+                "name": r.get("name"), "tags": r.get("tags", []), "note": r.get("note") or NOTES.get(r.get("name") or ""), "rows": r.get("rows"), "cols": r.get("cols"),
+                "nnz": r.get("nnz"), "int_vars": r.get("int_vars"), "reference": r.get("reference"),
+                "reference_source": r.get("reference_source"), "rel_error": r.get("rel_error"),
+                "rel_error_vs_highs": r.get("rel_error_vs_highs"), "verdict": r.get("verdict"), "ok": r.get("ok"),
+                "range_before": r.get("range_before"), "range_after": r.get("range_after"),
+                "ours": {k: o.get(k) for k in ("status", "objective", "time", "algorithm", "iterations", "nodes",
+                                               "mip_gap", "certificate")},
+                "highs": {k: h.get(k) for k in ("status", "objective", "time", "iterations", "nodes", "mip_gap")},
+                "counters": {k: dg.get(k) for k in ("degenerate_pivots", "bound_perturbations", "bland_pivots",
+                                                    "basis_repairs", "numerical_recoveries") if k in dg},
+            })
+        slim[kind] = {"meta": d.get("meta", {}), "file": d.get("file"), "rows": rows}
+    return _json_safe(slim)
 
 
 @app.post("/api/solve")

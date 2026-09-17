@@ -1,0 +1,2 @@
+# Benchmark comparison only (never imported by sovereign_opt)
+highspy>=1.7.0

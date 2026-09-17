@@ -34,6 +34,13 @@ jobs:
         run: |
           python -m pytest -v tests/
 
+      - name: Public Benchmarks vs HiGHS (Netlib / MIPLIB subset)
+        if: matrix.python-version == '3.12'
+        run: |
+          pip install highspy
+          python -m benchmarks.fetch --only netlib infeas miplib
+          python -m benchmarks.compare --suite ci --time-limit 120
+
   frontend-build:
     name: Frontend Build & Typecheck (Node.js 20)
     runs-on: ubuntu-latest

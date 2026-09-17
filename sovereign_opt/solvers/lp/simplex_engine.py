@@ -64,6 +64,11 @@ class SimplexEngine:
         self.ray: Optional[Tuple[int, float, np.ndarray]] = None
         self.farkas_row: Optional[np.ndarray] = None
         self.n_struct = n_struct
+        self._stale = True
+        self._xb_dirty = False
+        # robustness counters (reported by the benchmark robustness suite)
+        self.stats = {"degenerate_pivots": 0, "bland_pivots": 0, "bound_perturbations": 0, "basis_repairs": 0,
+                      "bound_flips": 0, "numerical_recoveries": 0}
         self.load(A, c, lb, ub)
 
     # ================================================================ setup
@@ -110,7 +115,14 @@ class SimplexEngine:
         if self.status is not None:
             self._sanitize_status()
             self._set_nonbasic_values()
-        self._stale = True
+        self._invalidate_values()
+
+    def _invalidate_values(self):
+        """Values changed but the basis matrix did not: keep the factorization, recompute x_B."""
+        if not self._stale and self.head is not None and self.factor.m == len(self.head) == self.m:
+            self._xb_dirty = True
+        else:
+            self._stale = True
 
     def set_cost(self, c: np.ndarray):
         self.c = np.array(c, dtype=np.float64)
@@ -119,12 +131,17 @@ class SimplexEngine:
         return self.head.copy(), self.status.copy()
 
     def set_basis(self, head: np.ndarray, status: np.ndarray):
-        self.head = np.array(head, dtype=np.int64)
+        new_head = np.array(head, dtype=np.int64)
+        same = self.head is not None and len(self.head) == len(new_head) and np.array_equal(self.head, new_head)
+        self.head = new_head
         self.status = np.array(status, dtype=np.int8)
         self.status[self.head] = BASIC
         self._sanitize_status()
         self._set_nonbasic_values()
-        self._stale = True
+        if same:
+            self._invalidate_values()  # same basis matrix (typical for B&B children): reuse the factorization
+        else:
+            self._stale = True
 
     def _default_status(self, idx: np.ndarray) -> np.ndarray:
         lb, ub = self.lb[idx], self.ub[idx]
@@ -190,6 +207,7 @@ class SimplexEngine:
                     if attempt == 3:
                         raise
                     continue
+                self.stats["basis_repairs"] += len(swaps)
                 for _, old, new in swaps:
                     self.status[old] = self._nearest_status(old)
                     self.status[new] = BASIC
@@ -199,6 +217,7 @@ class SimplexEngine:
             raise SingularBasisError("basis repair failed")
         self._compute_xB()
         self._stale = False
+        self._xb_dirty = False
 
     def _compute_xB(self):
         xn = self.x.copy()
@@ -237,6 +256,9 @@ class SimplexEngine:
                 return LPStatus.TIME_LIMIT
             if self._stale or self.factor.needs_refactor:
                 self._refactor()
+            elif self._xb_dirty:
+                self._compute_xB()
+                self._xb_dirty = False
 
             lb, ub = self.lb, self.ub
             head, st = self.head, self.status
@@ -283,6 +305,7 @@ class SimplexEngine:
                 return LPStatus.OPTIMAL
 
             if degenerate > 300:
+                self.stats["bland_pivots"] += 1
                 q = int(cand[0])  # Bland's rule
             else:
                 q = int(cand[np.argmax(improve[cand] ** 2 / weights[cand])])
@@ -330,6 +353,7 @@ class SimplexEngine:
                 return LPStatus.UNBOUNDED
 
             if t_flip <= t_max:
+                self.stats["bound_flips"] += 1
                 self.x[head] += delta * t_flip
                 if direction > 0:
                     self.x[q] = ub[q]
@@ -381,7 +405,9 @@ class SimplexEngine:
             self._record("phase1" if phase1 else "phase2", q, p, d[q], self.c)
 
             degenerate = degenerate + 1 if t <= 1e-12 else 0
+            self.stats["degenerate_pivots"] += t <= 1e-12
             if degenerate >= 50 and not perturbed:
+                self.stats["bound_perturbations"] += 1
                 self._perturb_bounds()
                 perturbed = True
 
@@ -436,6 +462,9 @@ class SimplexEngine:
                 return LPStatus.TIME_LIMIT
             if self._stale or self.factor.needs_refactor:
                 self._refactor()
+            elif self._xb_dirty:
+                self._compute_xB()
+                self._xb_dirty = False
 
             lb, ub = self.lb, self.ub
             head, st = self.head, self.status
@@ -484,6 +513,7 @@ class SimplexEngine:
             t_max = harris.min()
             elig = np.flatnonzero(exact <= t_max)
             if degenerate > 300:
+                self.stats["bland_pivots"] += 1
                 q = int(idx[elig].min())
             else:
                 q = int(idx[elig[np.argmax(np.abs(aj[elig]))]])
@@ -492,6 +522,7 @@ class SimplexEngine:
             arq = alpha[r]
             if abs(arq) < 1e-11 or abs(arq - alpha_row[q]) > 1e-7 * (1.0 + abs(arq)):
                 stalls += 1
+                self.stats["numerical_recoveries"] += 1
                 if stalls > 10:
                     return LPStatus.NUMERICAL_ERROR
                 self._stale = True
@@ -513,6 +544,7 @@ class SimplexEngine:
             self.factor.update(r, alpha)
 
             degenerate = degenerate + 1 if abs(d[q]) <= dtol else 0
+            self.stats["degenerate_pivots"] += abs(d[q]) <= dtol
             iters += 1
             self.total_iterations += 1
             self._record("dual", q, p, d[q], self.c)
@@ -530,7 +562,11 @@ class SimplexEngine:
         if self.head is None:
             self._init_slack_basis()
         try:
-            self._refactor()
+            if self._stale or self.factor.needs_refactor or self.factor.m != self.m:
+                self._refactor()
+            else:
+                self._compute_xB()
+                self._xb_dirty = False
             if method in ("dual", "auto"):
                 st = self._dual(max_iterations, deadline)
                 if st != LPStatus.DUAL_INFEASIBLE_START and st != LPStatus.NUMERICAL_ERROR:

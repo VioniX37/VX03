@@ -1,0 +1,329 @@
+{
+ "meta": {
+  "suite": "qp-large",
+  "timestamp": "20260917-101301",
+  "time_limit": 300.0,
+  "algorithm": "auto",
+  "machine": {
+   "platform": "Windows-11-10.0.26200-SP0",
+   "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+   "cpu_count": 12,
+   "python": "3.12.6",
+   "cuda": false,
+   "gpu": "None"
+  }
+ },
+ "rows": [
+  {
+   "key": "qp:MOSARQP1",
+   "name": "MOSARQP1",
+   "collection": "qp",
+   "tags": [],
+   "note": null,
+   "published_optimum": null,
+   "rows": 700,
+   "cols": 2500,
+   "nnz": 3422,
+   "int_vars": 0,
+   "q_nnz": 2590,
+   "problem_class": "QP",
+   "ours": {
+    "status": "optimal",
+    "objective": -952.8754381646165,
+    "time": 0.9153262000036193,
+    "parse_time": 0.03337869999813847,
+    "algorithm": "qp_interior_point",
+    "iterations": 10,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "FEASIBLE_CERTIFIED",
+    "max_primal_violation": 0.0,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.04668402671813965,
+     "strategy": 0.03301382064819336,
+     "solve": 0.7945523262023926,
+     "postsolve": 0.02190566062927246,
+     "certificate": 0.007178783416748047,
+     "total": 0.9161744117736816
+    },
+    "class": "QP",
+    "diagnostics": {
+     "primal_residual": 8.132260297265424e-13,
+     "dual_residual": 1.425948241294555e-14,
+     "barrier_mu": 2.953314004178135e-09,
+     "algorithm": "primal-dual Mehrotra predictor-corrector on regularized KKT system",
+     "dual_sign_convention": "minimize-normalized: y_i > 0 row at lower bound, y_i < 0 at upper bound",
+     "polished": false,
+     "dual_recovery": "not available for this size / point"
+    }
+   },
+   "highs": {
+    "status": "solve error",
+    "objective": null,
+    "time": 5.431944800002384,
+    "parse_time": 0.018503500003134832,
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": null,
+   "reference_source": null,
+   "rel_error": null,
+   "rel_error_vs_highs": null,
+   "verdict": "mismatch (optimal)",
+   "ok": false
+  },
+  {
+   "key": "qp:AUG3DCQP",
+   "name": "AUG3DCQP",
+   "collection": "qp",
+   "tags": [],
+   "note": null,
+   "published_optimum": null,
+   "rows": 1000,
+   "cols": 3873,
+   "nnz": 6546,
+   "int_vars": 0,
+   "q_nnz": 3873,
+   "problem_class": "QP",
+   "ours": {
+    "status": "optimal",
+    "objective": 993.3621486153834,
+    "time": 0.4539985000010347,
+    "parse_time": 0.03950579999946058,
+    "algorithm": "qp_interior_point",
+    "iterations": 12,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "FEASIBLE_CERTIFIED",
+    "max_primal_violation": 2.708944180085382e-14,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.10259461402893066,
+     "strategy": 0.05586981773376465,
+     "solve": 0.2287437915802002,
+     "postsolve": 0.030999422073364258,
+     "certificate": 0.010000467300415039,
+     "total": 0.4542217254638672
+    },
+    "class": "QP",
+    "diagnostics": {
+     "primal_residual": 6.994405055138486e-15,
+     "dual_residual": 2.62195863978687e-14,
+     "barrier_mu": 8.558545762731351e-10,
+     "algorithm": "primal-dual Mehrotra predictor-corrector on regularized KKT system",
+     "dual_sign_convention": "minimize-normalized: y_i > 0 row at lower bound, y_i < 0 at upper bound",
+     "polished": false,
+     "dual_recovery": "not available for this size / point"
+    }
+   },
+   "highs": {
+    "status": "optimal",
+    "objective": 993.3621465250958,
+    "time": 201.76013970001077,
+    "parse_time": 0.020899199997074902,
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": 993.3621465250958,
+   "reference_source": "HiGHS",
+   "rel_error": 2.1042553188388028e-09,
+   "rel_error_vs_highs": 2.1042553188388028e-09,
+   "verdict": "match (FEASIBLE_CERTIFIED)",
+   "ok": true
+  },
+  {
+   "key": "qp:CVXQP1_M",
+   "name": "CVXQP1_M",
+   "collection": "qp",
+   "tags": [
+    "scale"
+   ],
+   "note": null,
+   "published_optimum": null,
+   "rows": 500,
+   "cols": 1000,
+   "nnz": 1498,
+   "int_vars": 0,
+   "q_nnz": 6968,
+   "problem_class": "QP",
+   "ours": {
+    "status": "optimal",
+    "objective": 1087511.5698052982,
+    "time": 290.2304973999999,
+    "parse_time": 0.01798590000544209,
+    "algorithm": "qp_interior_point",
+    "iterations": 10,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "FEASIBLE_CERTIFIED",
+    "max_primal_violation": 2.0284591784047734e-09,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.026523828506469727,
+     "strategy": 0.01900029182434082,
+     "solve": 159.40885615348816,
+     "postsolve": 130.76091837882996,
+     "certificate": 0.008687973022460938,
+     "total": 290.22749280929565
+    },
+    "class": "QP",
+    "diagnostics": {
+     "primal_residual": 2.4981024364590806e-11,
+     "dual_residual": 9.105438095519504e-13,
+     "barrier_mu": 1.111365013319658e-06,
+     "algorithm": "primal-dual Mehrotra predictor-corrector on regularized KKT system",
+     "dual_sign_convention": "minimize-normalized: y_i > 0 row at lower bound, y_i < 0 at upper bound",
+     "polished": false,
+     "dual_recovery": "not available for this size / point"
+    }
+   },
+   "highs": {
+    "status": "optimal",
+    "objective": 1087511.567321501,
+    "time": 0.09982030000537634,
+    "parse_time": 0.011638500000117347,
+    "iterations": 301,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": 1087511.567321501,
+   "reference_source": "HiGHS",
+   "rel_error": 2.2839272098468522e-09,
+   "rel_error_vs_highs": 2.2839272098468522e-09,
+   "verdict": "match (FEASIBLE_CERTIFIED)",
+   "ok": true
+  },
+  {
+   "key": "qp:STCQP1",
+   "name": "STCQP1",
+   "collection": "qp",
+   "tags": [
+    "scale"
+   ],
+   "note": null,
+   "published_optimum": null,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "int_vars": 0,
+   "q_nnz": 49109,
+   "problem_class": "QP",
+   "ours": {
+    "status": "optimal",
+    "objective": 155143.55470911262,
+    "time": 1.1250368999899365,
+    "parse_time": 0.09733819999382831,
+    "algorithm": "qp_interior_point",
+    "iterations": 11,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "FEASIBLE_CERTIFIED",
+    "max_primal_violation": 0.0,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.8708639144897461,
+     "strategy": 0.05911874771118164,
+     "solve": 0.04100990295410156,
+     "postsolve": 0.07029867172241211,
+     "certificate": 0.049141645431518555,
+     "total": 1.124936819076538
+    },
+    "class": "QP",
+    "diagnostics": {
+     "primal_residual": 8.881784197001253e-17,
+     "dual_residual": 3.737034557531879e-16,
+     "barrier_mu": 1.4381477147676932e-09,
+     "algorithm": "primal-dual Mehrotra predictor-corrector on regularized KKT system",
+     "dual_sign_convention": "minimize-normalized: y_i > 0 row at lower bound, y_i < 0 at upper bound",
+     "polished": false,
+     "dual_recovery": "not available for this size / point"
+    }
+   },
+   "highs": {
+    "status": "optimal",
+    "objective": 155143.55470395752,
+    "time": 147.44838170000003,
+    "parse_time": 0.0657708999933675,
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": 155143.55470395752,
+   "reference_source": "HiGHS",
+   "rel_error": 3.3227956462498324e-11,
+   "rel_error_vs_highs": 3.3227956462498324e-11,
+   "verdict": "match (FEASIBLE_CERTIFIED)",
+   "ok": true
+  },
+  {
+   "key": "qp:AUG2DC",
+   "name": "AUG2DC",
+   "collection": "qp",
+   "tags": [
+    "scale"
+   ],
+   "note": null,
+   "published_optimum": null,
+   "rows": 10000,
+   "cols": 20200,
+   "nnz": 40000,
+   "int_vars": 0,
+   "q_nnz": 20200,
+   "problem_class": "QP",
+   "ours": {
+    "status": "optimal",
+    "objective": 1818368.0655702017,
+    "time": 22.156845799996518,
+    "parse_time": 0.31701240000256803,
+    "algorithm": "qp_interior_point",
+    "iterations": 6,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "FEASIBLE_CERTIFIED",
+    "max_primal_violation": 3.197442310920451e-14,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.5988202095031738,
+     "strategy": 0.23828792572021484,
+     "solve": 20.78367304801941,
+     "postsolve": 0.2798337936401367,
+     "certificate": 0.14471983909606934,
+     "total": 22.15606141090393
+    },
+    "class": "QP",
+    "diagnostics": {
+     "primal_residual": 2.1316282072803006e-14,
+     "dual_residual": 5.854305502868099e-11,
+     "barrier_mu": 2.4859971364802423e-10,
+     "algorithm": "primal-dual Mehrotra predictor-corrector on regularized KKT system",
+     "dual_sign_convention": "minimize-normalized: y_i > 0 row at lower bound, y_i < 0 at upper bound",
+     "polished": false,
+     "dual_recovery": "not available for this size / point"
+    }
+   },
+   "highs": {
+    "status": "solve error",
+    "objective": null,
+    "time": 0.4136662999953842,
+    "parse_time": 0.10602310000103898,
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": null,
+   "reference_source": null,
+   "rel_error": null,
+   "rel_error_vs_highs": null,
+   "verdict": "mismatch (optimal)",
+   "ok": false
+  }
+ ]
+}

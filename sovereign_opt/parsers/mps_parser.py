@@ -17,12 +17,21 @@ class MPSParser:
 
     @classmethod
     def parse_file(cls, filepath: str) -> OptimizationModel:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
+        """Reads .mps / .qps / .mps.gz files and Netlib compressed (EMPS) files."""
+        if str(filepath).endswith(".gz"):
+            import gzip
+            with gzip.open(filepath, "rt", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        else:
+            with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
         return cls.parse_string(content)
 
     @classmethod
     def parse_string(cls, content: str) -> OptimizationModel:
+        from sovereign_opt.parsers.emps import is_emps, expand_emps
+        if is_emps(content):
+            content = expand_emps(content)
         lines = content.splitlines()
         model_name = "MPS_Model"
         section = None
@@ -35,6 +44,7 @@ class MPSParser:
         ranges: Dict[str, float] = {}
         var_bounds: Dict[str, Tuple[float, float, VariableType]] = {}
         var_order: List[str] = []
+        known_vars: set = set()
         quad_terms: Dict[Tuple[str, str], float] = {}
         obj_offset = 0.0
         obj_sense = ObjectiveSense.MINIMIZE
@@ -93,7 +103,8 @@ class MPSParser:
 
                 # Format: ColName Row1 Val1 [Row2 Val2]
                 col_name = tokens[0]
-                if col_name not in var_order:
+                if col_name not in known_vars:
+                    known_vars.add(col_name)
                     var_order.append(col_name)
                     v_type = VariableType.INTEGER if is_integer_block else VariableType.CONTINUOUS
                     # Default bounds: 0 <= x <= +inf
@@ -149,11 +160,20 @@ class MPSParser:
             elif section == "BOUNDS":
                 # Format: BoundType [BoundID] ColName [Value]
                 b_type = tokens[0].upper()
-                col_name = tokens[2] if len(tokens) >= 3 else tokens[1]
-                val = float(tokens[3]) if len(tokens) >= 4 else 0.0
+                # The bound-set name is optional: "UP BND X1 4" or "UP X1 4"
+                if b_type in ("FR", "MI", "PL", "BV") and len(tokens) == 3:
+                    with_set = not (tokens[1] in known_vars and tokens[2] not in known_vars)
+                elif b_type in ("FR", "MI", "PL", "BV"):
+                    with_set = len(tokens) >= 3
+                else:
+                    with_set = len(tokens) >= 4
+                col_name = tokens[2] if with_set else tokens[1]
+                val_idx = 3 if with_set else 2
+                val = float(tokens[val_idx]) if len(tokens) > val_idx else 0.0
 
                 if col_name not in var_bounds:
-                    if col_name not in var_order:
+                    if col_name not in known_vars:
+                        known_vars.add(col_name)
                         var_order.append(col_name)
                     var_bounds[col_name] = (0.0, float("inf"), VariableType.CONTINUOUS)
 
