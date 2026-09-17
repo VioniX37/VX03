@@ -114,3 +114,11 @@ def test_engine_never_imports_comparison_solvers():
             if f.endswith(".py"):
                 text = open(os.path.join(dirpath, f), encoding="utf-8").read()
                 assert not banned.search(text), f"external solver referenced in {f}"
+
+
+def test_unit_commitment_fleet_milp_matches_reference():
+    """720-variable unit commitment (240 binaries x 2): optimum cross-checked with HiGHS (868889.9109681)."""
+    from benchmarks.industrial.power_dispatch import build_unit_commitment_fleet
+    out = solve_model(build_unit_commitment_fleet(10, 24), time_limit_seconds=120)
+    assert out.certificate.status == "OPTIMAL_CERTIFIED"
+    assert abs(out.result.objective_value - 868889.9109681122) <= 1e-4 * 868889.91

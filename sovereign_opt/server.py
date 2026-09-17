@@ -106,6 +106,32 @@ PRESETS: Dict[str, dict] = {
 }
 
 
+from benchmarks.industrial.power_dispatch import build_unit_commitment_fleet  # noqa: E402
+from benchmarks.industrial.supply_chain import build_facility_location_model  # noqa: E402
+
+PRESETS["unit_commitment_fleet_720"] = {
+    "builder": lambda: build_unit_commitment_fleet(10, 24),
+    "name": "Unit Commitment, 10 generators x 24 h (MILP, 720 variables)",
+    "category": "Energy & Utilities",
+    "description": "On/off, start-up and output per generator-hour with ramp limits and spinning reserve. "
+                   "480 binaries. Optimum cross-checked with HiGHS: 868,889.91.",
+    "problem_class": "MILP",
+}
+PRESETS["unit_commitment_fleet_2880"] = {
+    "builder": lambda: build_unit_commitment_fleet(20, 48),
+    "name": "Unit Commitment, 20 generators x 48 h (MILP, 2,880 variables)",
+    "category": "Energy & Utilities",
+    "description": "1,920 binaries, 4,856 constraints. Optimum cross-checked with HiGHS: 3,007,444.64. Use a 5 min limit.",
+    "problem_class": "MILP",
+}
+PRESETS["facility_location_1220"] = {
+    "builder": lambda: build_facility_location_model(20, 100),
+    "name": "Warehouse Location, 20 sites x 100 customers (MILP, 1,220 variables)",
+    "category": "Supply Chain & Logistics",
+    "description": "Which warehouses to open and how to route demand. Big-M linking makes the LP relaxation weak. "
+                   "Optimum cross-checked with HiGHS: 9,945.23. Use a 5 min limit.",
+    "problem_class": "MILP",
+}
 PRESETS["supply_chain_lp_50k"] = {
     "builder": lambda: build_supply_chain_model(target_vars=50_000),
     "name": "Production-Distribution Network, 50k variables (LP)",

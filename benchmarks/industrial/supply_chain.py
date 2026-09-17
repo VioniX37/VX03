@@ -156,3 +156,47 @@ def arrays_to_model(lp: LPArrays) -> OptimizationModel:
 def build_supply_chain_model(target_vars: int = 2000, products: int = 4, neighbours: int = 5) -> OptimizationModel:
     P, W, C = sizes_for(target_vars, products, neighbours)
     return arrays_to_model(build_supply_chain_arrays(P, W, C, products, neighbours))
+
+
+def build_facility_location_model(warehouses: int = 30, customers: int = 150, products: int = 2,
+                                  neighbours: int = 6, seed: int = 11) -> OptimizationModel:
+    """
+    Capacitated warehouse location (MILP): decide which warehouses to open (binary y_w, fixed cost) and
+    route each customer's demand from nearby open warehouses. Big-M linking z[w,c,k] <= d[c,k] * y_w makes
+    the LP relaxation weak, which is what makes this class hard for branch-and-bound.
+    """
+    from sovereign_opt.model.variable import VariableType
+    rng = np.random.default_rng(seed)
+    W, C, K, L = warehouses, customers, products, min(neighbours, warehouses)
+    loc_w = rng.uniform(0, 100, (W, 2))
+    loc_c = rng.uniform(0, 100, (C, 2))
+    demand = rng.uniform(5, 40, (C, K))
+    cap = rng.uniform(0.8, 1.4, W) * demand.sum() / W * 3.0
+    fixed = rng.uniform(800, 1600, W) * (cap / cap.mean())
+    dist = np.linalg.norm(loc_c[:, None, :] - loc_w[None, :, :], axis=2)
+    near = np.argsort(dist, axis=1)[:, :L]
+
+    model = OptimizationModel(name=f"Facility_Location_W{W}_C{C}_K{K}")
+    obj = {}
+    for w in range(W):
+        model.add_variable(f"y_{w}", 0.0, 1.0, VariableType.BINARY)
+        obj[f"y_{w}"] = float(fixed[w])
+    through = {w: {} for w in range(W)}
+    for c in range(C):
+        for k in range(K):
+            dem = {}
+            for w in near[c]:
+                z = f"z_{w}_{c}_{k}"
+                model.add_variable(z, 0.0, float(demand[c, k]))
+                obj[z] = float(dist[c, w] * 0.05)
+                dem[z] = 1.0
+                through[w][z] = 1.0
+                model.add_constraint(f"link_{w}_{c}_{k}", {z: 1.0, f"y_{w}": -float(demand[c, k])},
+                                     ConstraintSense.LE, rhs=0.0)
+            model.add_constraint(f"demand_{c}_{k}", dem, ConstraintSense.GE, rhs=float(demand[c, k]))
+    for w in range(W):
+        coeffs = dict(through[w])
+        coeffs[f"y_{w}"] = -float(cap[w])
+        model.add_constraint(f"cap_{w}", coeffs, ConstraintSense.LE, rhs=0.0)
+    model.set_objective(obj, ObjectiveSense.MINIMIZE)
+    return model

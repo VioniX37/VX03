@@ -39,6 +39,7 @@ from sovereign_opt.solvers.milp.cuts import separate_gmi_cuts, separate_cover_cu
 from sovereign_opt.solvers.milp.heuristics import (
     PrimalHeuristic,
     copy_model_with_bounds,
+    directional_rounding,
     fractional_dive,
     feasibility_pump,
     rins,
@@ -142,6 +143,8 @@ class _BranchAndCut:
         self.proof_complete = True
         self.root_bound = -np.inf
         self.counter = itertools.count(1)
+        self.strong_time = 0.0  # seconds spent in strong branching (budgeted)
+        self.strong_lps = 0
 
     # --------------------------------------------------------------- helpers
     def user(self, z: float) -> float:
@@ -271,8 +274,9 @@ class _BranchAndCut:
                 self.try_incumbent(np.array([rounded[nm] for nm in names]), "rounding")
             saved = e.get_basis()
             self.fix_and_complete(xs, "rounding")
+            directional_rounding(self, xs)
             e.set_basis(*saved)
-            self.solve_lp(f.lb, f.ub, None)
+            self.solve_lp(f.lb, f.ub, saved)
 
         if self.cfg.enable_cuts:
             self.cut_loop()
@@ -319,7 +323,9 @@ class _BranchAndCut:
         stall = 0
         z_prev = e.objective()
         for _ in range(self.cfg.max_cut_rounds):
-            if time.time() > self.start + 0.3 * self.time_limit:
+            now = time.time()
+            # at least one round whenever there is time for it; more rounds only early in the run
+            if now > self.start + 0.6 * self.time_limit or (self.cut_rounds > 0 and now > self.start + 0.3 * self.time_limit):
                 break
             if self.fractional(e.x[: self.n]).size == 0:
                 break
@@ -395,11 +401,24 @@ class _BranchAndCut:
         order = np.argsort(-score)
         rel = self.cfg.reliability
         unreliable = [k for k in order if not self.pc.reliable(int(frac[k]), rel.reliability)]
-        if not unreliable or node.depth > 12 or time.time() > self.deadline - 0.2 * self.time_limit:
+        now = time.time()
+        elapsed = max(now - self.start, 1e-3)
+        # Strong branching budget: it is the most expensive part of the search on large models, so cap its
+        # share of the run (SCIP / CPLEX do the same) and shrink the work per node with depth and model size.
+        over_budget = self.strong_time > 0.25 * elapsed + 1.0 or now > self.deadline - 0.2 * self.time_limit
+        if not unreliable or node.depth > 10 or over_budget:
             return "branch", int(frac[order[0]])
 
+        big = self.form.m > 1000
+        candidates = max(2, (rel.strong_candidates if node.depth == 0 else rel.strong_candidates // 2) // (2 if big else 1))
+        iter_cap = max(15, min(rel.strong_iterations, 25 if big else rel.strong_iterations))
+        lookahead = 3
+        t_sb = time.time()
         best = None
-        for k in unreliable[: rel.strong_candidates]:
+        since_best = 0
+        for k in unreliable[:candidates]:
+            if since_best >= lookahead or time.time() > self.deadline:
+                break
             j = int(frac[k])
             gains = []
             for direction in (-1, 1):
@@ -408,7 +427,8 @@ class _BranchAndCut:
                     cub[j] = np.floor(vals[k])
                 else:
                     clb[j] = np.ceil(vals[k])
-                st = self.solve_lp(clb, cub, basis, max_iter=rel.strong_iterations)
+                st = self.solve_lp(clb, cub, basis, max_iter=iter_cap)
+                self.strong_lps += 1
                 if st == LPStatus.INFEASIBLE:
                     gain = np.inf
                 elif st in (LPStatus.OPTIMAL, LPStatus.ITERATION_LIMIT):
@@ -419,16 +439,21 @@ class _BranchAndCut:
                 else:
                     gain = 0.0
                 gains.append(gain)
-            if np.isinf(gains[0]) and np.isinf(gains[1]):
-                return "infeasible", None
-            if np.isinf(gains[0]):
-                return "tighten", (j, float(np.ceil(vals[k])), float(ub[j]))
-            if np.isinf(gains[1]):
+            if np.isinf(gains[0]) or np.isinf(gains[1]):
+                self.strong_time += time.time() - t_sb
+                if np.isinf(gains[0]) and np.isinf(gains[1]):
+                    return "infeasible", None
+                if np.isinf(gains[0]):
+                    return "tighten", (j, float(np.ceil(vals[k])), float(ub[j]))
                 return "tighten", (j, float(lb[j]), float(np.floor(vals[k])))
             s = float(product_score(np.array([gains[0]]), np.array([gains[1]]))[0])
             if best is None or s > best[0]:
                 best = (s, j)
-        return "branch", best[1]
+                since_best = 0
+            else:
+                since_best += 1
+        self.strong_time += time.time() - t_sb
+        return "branch", best[1] if best is not None else int(frac[order[0]])
 
     # ------------------------------------------------------------------ tree
     def tree(self, root: TreeNode, root_x: np.ndarray) -> SolverResult:
@@ -592,6 +617,8 @@ class _BranchAndCut:
             "heuristic_solutions": dict(self.heuristic_hits),
             "incumbent_history": self.incumbent_history[-20:],
             "lp_iterations": int(self.lp_iterations),
+            "strong_branching_lps": int(self.strong_lps),
+            "strong_branching_seconds": round(self.strong_time, 3),
             "branching": "reliability pseudocost (strong-branching initialized)" if self.cfg.branching_strategy is None
             else type(self.cfg.branching_strategy).__name__,
             "has_feasible_point": has_inc,

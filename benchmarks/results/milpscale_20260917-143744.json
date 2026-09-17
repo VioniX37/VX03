@@ -1,0 +1,108 @@
+{
+ "meta": {
+  "timestamp": "20260917-143744",
+  "machine": {
+   "platform": "Windows-11-10.0.26200-SP0",
+   "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+   "cpu_count": 12,
+   "python": "3.12.6",
+   "cuda": false,
+   "gpu": "None"
+  },
+  "time_limit": 180.0
+ },
+ "rows": [
+  {
+   "name": "unit_commitment_G10_T24",
+   "cols": 720,
+   "rows": 1228,
+   "int_vars": 480,
+   "ours": {
+    "status": "optimal",
+    "objective": 868889.9109681123,
+    "time": 1.0312118000001647,
+    "best_bound": 868889.9109681123,
+    "mip_gap": 0.0,
+    "nodes": 1,
+    "certificate": "OPTIMAL_CERTIFIED"
+   },
+   "highs": {
+    "status": "optimal",
+    "objective": 868889.9109681122,
+    "time": 0.11428920000616927,
+    "mip_gap": 0.0,
+    "nodes": 1
+   },
+   "rel_error_vs_highs": 1.3398167058612238e-16
+  },
+  {
+   "name": "unit_commitment_G40_T72",
+   "cols": 8640,
+   "rows": 14464,
+   "int_vars": 5760,
+   "ours": {
+    "status": "feasible",
+    "objective": 9791641.914303308,
+    "time": 180.17850790001103,
+    "best_bound": 9485632.007656207,
+    "mip_gap": 0.03125215457482078,
+    "nodes": 79,
+    "certificate": "FEASIBLE_CERTIFIED"
+   },
+   "highs": {
+    "status": "optimal",
+    "objective": 9488388.800674863,
+    "time": 1.9611941000039224,
+    "mip_gap": 0.0,
+    "nodes": 1
+   },
+   "rel_error_vs_highs": 0.03196044344292429
+  },
+  {
+   "name": "facility_location_W20_C100",
+   "cols": 1220,
+   "rows": 1420,
+   "int_vars": 20,
+   "ours": {
+    "status": "optimal",
+    "objective": 9945.231289297722,
+    "time": 67.30861300000106,
+    "best_bound": 9945.231289297722,
+    "mip_gap": 0.0,
+    "nodes": 92,
+    "certificate": "OPTIMAL_CERTIFIED"
+   },
+   "highs": {
+    "status": "optimal",
+    "objective": 9945.231289297722,
+    "time": 3.5511479999986477,
+    "mip_gap": 0.0,
+    "nodes": 25
+   },
+   "rel_error_vs_highs": 0.0
+  },
+  {
+   "name": "facility_location_W40_C300",
+   "cols": 3640,
+   "rows": 4240,
+   "int_vars": 40,
+   "ours": {
+    "status": "feasible",
+    "objective": 21490.216501243227,
+    "time": 180.0557301999943,
+    "best_bound": 21349.144990765613,
+    "mip_gap": 0.006564452734547952,
+    "nodes": 68,
+    "certificate": "FEASIBLE_CERTIFIED"
+   },
+   "highs": {
+    "status": "optimal",
+    "objective": 21490.21650124323,
+    "time": 21.253123799993773,
+    "mip_gap": 9.605647157278958e-05,
+    "nodes": 38
+   },
+   "rel_error_vs_highs": 1.6928534930679978e-16
+  }
+ ]
+}

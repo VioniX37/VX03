@@ -18,7 +18,8 @@ from typing import Callable, List, Optional, Tuple
 import numpy as np
 import scipy.sparse as sp
 
-from sovereign_opt.solvers.lp.basis import BasisFactor, SingularBasisError, repair_basis
+from sovereign_opt.solvers.lp.basis import HAVE_NUMBA, BasisFactor, SingularBasisError, repair_basis
+from sovereign_opt.solvers.lp import kernels
 
 BASIC, AT_LOWER, AT_UPPER, FREE_ZERO = 0, 1, 2, 3
 
@@ -66,6 +67,8 @@ class SimplexEngine:
         self.n_struct = n_struct
         self._stale = True
         self._xb_dirty = False
+        # dual pricing: exact dual steepest edge on small bases, dual Devex on large ones (one FTRAN less per pivot)
+        self.dual_pricing = "dse" if A.shape[0] <= 5000 else "devex"
         # robustness counters (reported by the benchmark robustness suite)
         self.stats = {"degenerate_pivots": 0, "bland_pivots": 0, "bound_perturbations": 0, "basis_repairs": 0,
                       "bound_flips": 0, "numerical_recoveries": 0}
@@ -433,6 +436,14 @@ class SimplexEngine:
     # ============================================================== dual
     def _make_dual_feasible(self, d: np.ndarray) -> bool:
         st = self.status
+        if HAVE_NUMBA:
+            code = kernels.dual_feasibility_flips(st, d, self.lb, self.ub, self.dual_tol)
+            if code < 0:
+                return False
+            if code > 0:
+                self._set_nonbasic_values()
+                self._compute_xB()
+            return True
         dtol = self.dual_tol
         boxed = np.isfinite(self.lb) & np.isfinite(self.ub)
         bad_l = (st == AT_LOWER) & (d < -dtol)
@@ -454,6 +465,8 @@ class SimplexEngine:
         iters = 0
         stalls = 0
         degenerate = 0
+        d_cache: Optional[np.ndarray] = None
+        d_factor_id = -1
 
         while True:
             if iters >= max_iter:
@@ -468,23 +481,31 @@ class SimplexEngine:
 
             lb, ub = self.lb, self.ub
             head, st = self.head, self.status
-            y = self.factor.btran(self.c[head])
-            d = self.c - self.AT @ y
-            d[head] = 0.0
+            if d_cache is None or d_factor_id != self.factor.num_factorizations:
+                # full recomputation after every (re)factorization bounds the drift of the updated values
+                y = self.factor.btran(self.c[head])
+                d = self.c - self.AT @ y
+                d[head] = 0.0
+                d_factor_id = self.factor.num_factorizations
+            else:
+                d = d_cache
             if not self._make_dual_feasible(d):
                 return LPStatus.DUAL_INFEASIBLE_START
 
             xB = self.x[head]
             lbB, ubB = lb[head], ub[head]
-            infeas = np.maximum(lbB - xB, 0.0) + np.maximum(xB - ubB, 0.0)
-            infeas[infeas <= ptol] = 0.0
-            if not infeas.any():
+            if HAVE_NUMBA:
+                r = int(kernels.choose_leaving_row(xB, lbB, ubB, dse, ptol))
+            else:
+                infeas = np.maximum(lbB - xB, 0.0) + np.maximum(xB - ubB, 0.0)
+                infeas[infeas <= ptol] = 0.0
+                r = int(np.argmax(infeas * infeas / dse)) if infeas.any() else -1
+            if r < 0:
                 if self.factor.num_updates > 0:
                     self._stale = True
                     continue
                 return LPStatus.OPTIMAL
 
-            r = int(np.argmax(infeas * infeas / dse))
             p = int(head[r])
             s = 1.0 if xB[r] > ubB[r] else -1.0
             bound = ubB[r] if s > 0 else lbB[r]
@@ -493,30 +514,37 @@ class SimplexEngine:
             rho = self.factor.row_of_inverse(r)
             alpha_row = self.AT @ rho
             at = s * alpha_row
-            cand = (
-                ((st == AT_LOWER) & (at > pivtol))
-                | ((st == AT_UPPER) & (at < -pivtol))
-                | ((st == FREE_ZERO) & (np.abs(at) > pivtol))
-            ) & (ub > lb)
-            idx = np.flatnonzero(cand)
-            if idx.size == 0:
+            if HAVE_NUMBA:
+                q = int(kernels.dual_ratio_test(st, at, d, lb, ub, pivtol, dtol, degenerate > 300))
+                if degenerate > 300:
+                    self.stats["bland_pivots"] += 1
+            else:
+                cand = (
+                    ((st == AT_LOWER) & (at > pivtol))
+                    | ((st == AT_UPPER) & (at < -pivtol))
+                    | ((st == FREE_ZERO) & (np.abs(at) > pivtol))
+                ) & (ub > lb)
+                idx = np.flatnonzero(cand)
+                if idx.size == 0:
+                    q = -1
+                else:
+                    dj, aj, sj = d[idx], at[idx], st[idx]
+                    harris = np.where(sj == AT_LOWER, (dj + dtol) / aj,
+                                      np.where(sj == AT_UPPER, (dj - dtol) / aj, dtol / np.abs(aj)))
+                    exact = np.maximum(np.where(sj == FREE_ZERO, 0.0, dj / aj), 0.0)
+                    t_max = harris.min()
+                    elig = np.flatnonzero(exact <= t_max)
+                    if degenerate > 300:
+                        self.stats["bland_pivots"] += 1
+                        q = int(idx[elig].min())
+                    else:
+                        q = int(idx[elig[np.argmax(np.abs(aj[elig]))]])
+            if q < 0:
                 if self.factor.num_updates > 0:
                     self._stale = True
                     continue
                 self.farkas_row = s * rho
                 return LPStatus.INFEASIBLE
-
-            dj, aj, sj = d[idx], at[idx], st[idx]
-            harris = np.where(sj == AT_LOWER, (dj + dtol) / aj,
-                              np.where(sj == AT_UPPER, (dj - dtol) / aj, dtol / np.abs(aj)))
-            exact = np.maximum(np.where(sj == FREE_ZERO, 0.0, dj / aj), 0.0)
-            t_max = harris.min()
-            elig = np.flatnonzero(exact <= t_max)
-            if degenerate > 300:
-                self.stats["bland_pivots"] += 1
-                q = int(idx[elig].min())
-            else:
-                q = int(idx[elig[np.argmax(np.abs(aj[elig]))]])
 
             alpha = self.factor.ftran(self._column(q))
             arq = alpha[r]
@@ -529,11 +557,18 @@ class SimplexEngine:
                 continue
 
             theta = delta0 / arq
-            tau = self.factor.ftran(rho)
             wr = dse[r]
             ratio = alpha / arq
-            dse = np.maximum(dse - 2.0 * ratio * tau + ratio * ratio * wr, 1e-6)
-            dse[r] = max(wr / (arq * arq), 1e-6)
+            if self.dual_pricing == "devex":
+                # dual Devex reference weights: no extra FTRAN per iteration (cheaper on large bases)
+                dse = np.maximum(dse, ratio * ratio * wr)
+                dse[r] = max(wr / (arq * arq), 1.0)
+                if dse.max() > 1e8:
+                    dse[:] = 1.0
+            else:
+                tau = self.factor.ftran(rho)
+                dse = np.maximum(dse - 2.0 * ratio * tau + ratio * ratio * wr, 1e-6)
+                dse[r] = max(wr / (arq * arq), 1e-6)
 
             self.x[head] -= theta * alpha
             self.x[q] += theta
@@ -543,8 +578,12 @@ class SimplexEngine:
             head[r] = q
             self.factor.update(r, alpha)
 
-            degenerate = degenerate + 1 if abs(d[q]) <= dtol else 0
-            self.stats["degenerate_pivots"] += abs(d[q]) <= dtol
+            # reduced-cost update from the pivot row: d <- d - (d_q / alpha_rq) * alpha_row
+            dq = d[q]
+            degenerate = degenerate + 1 if abs(dq) <= dtol else 0
+            self.stats["degenerate_pivots"] += abs(dq) <= dtol
+            d_cache = d - (dq / alpha_row[q]) * alpha_row
+            d_cache[head] = 0.0
             iters += 1
             self.total_iterations += 1
             self._record("dual", q, p, d[q], self.c)
