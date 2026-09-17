@@ -118,3 +118,6 @@ scratch/
 tmp/
 *.tmp
 *.bak
+
+# --- Benchmark data (downloaded by benchmarks/fetch.py) ---
+benchmarks/data/

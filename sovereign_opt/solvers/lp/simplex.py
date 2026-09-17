@@ -52,6 +52,7 @@ def lp_result_from_engine(
         "pricing_method": "devex (primal) / dual steepest edge (dual)",
         "phase1_iterations": int(engine.phase1_iterations),
         "refactorizations": int(engine.factor.num_factorizations),
+        **{k: int(v) for k, v in engine.stats.items()},
         "dual_sign_convention": "minimize-normalized: y_i > 0 row at lower bound, y_i < 0 at upper bound",
     }
     trace = []

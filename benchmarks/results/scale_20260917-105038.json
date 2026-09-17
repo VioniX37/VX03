@@ -1,0 +1,170 @@
+{
+ "meta": {
+  "timestamp": "20260917-105038",
+  "machine": {
+   "platform": "Windows-11-10.0.26200-SP0",
+   "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+   "cpu_count": 12,
+   "python": "3.12.6",
+   "cuda": false,
+   "gpu": "None"
+  },
+  "time_limit": 600.0,
+  "pdlp_tol": 0.0001,
+  "model": "supply_chain production-distribution LP"
+ },
+ "rows": [
+  {
+   "target": 1000,
+   "rows": 224,
+   "cols": 1008,
+   "nnz": 2976,
+   "results": {
+    "highs": {
+     "status": "optimal",
+     "objective": 283452.56502531044,
+     "time": 0.005012299996451475,
+     "rel_error_vs_highs": 0.0
+    },
+    "dual_simplex": {
+     "status": "optimal",
+     "objective": 283452.56502531044,
+     "time": 0.49994400001014583,
+     "iterations": 279,
+     "certificate": "OPTIMAL_CERTIFIED",
+     "rel_error_vs_highs": 0.0
+    },
+    "interior_point": {
+     "status": "optimal",
+     "objective": 283452.56502531044,
+     "time": 0.5512667000002693,
+     "iterations": 13,
+     "certificate": "OPTIMAL_CERTIFIED",
+     "rel_error_vs_highs": 0.0
+    },
+    "pdlp_cpu": {
+     "status": "optimal",
+     "objective": 283460.563955476,
+     "time": 0.03157520294189453,
+     "setup_time": 0.02096390724182129,
+     "iterations": 448,
+     "restarts": 4,
+     "device": "cpu-numpy",
+     "rel_primal_residual": 4.958528320933796e-05,
+     "rel_dual_residual": 6.946144630780832e-05,
+     "rel_gap": 3.209912274800811e-05,
+     "rel_error_vs_highs": 2.8219642905083257e-05
+    }
+   }
+  },
+  {
+   "target": 10000,
+   "rows": 2029,
+   "cols": 9936,
+   "nnz": 29472,
+   "results": {
+    "highs": {
+     "status": "optimal",
+     "objective": 1766192.374110901,
+     "time": 0.12797439999121707,
+     "rel_error_vs_highs": 0.0
+    },
+    "dual_simplex": {
+     "status": "optimal",
+     "objective": 1766192.374110898,
+     "time": 19.80150909999793,
+     "iterations": 2666,
+     "certificate": "OPTIMAL_CERTIFIED",
+     "rel_error_vs_highs": 1.7137421788631555e-15
+    },
+    "interior_point": {
+     "status": "optimal",
+     "objective": 1766192.3741108985,
+     "time": 31.827446600000258,
+     "iterations": 20,
+     "certificate": "OPTIMAL_CERTIFIED",
+     "rel_error_vs_highs": 1.4500895359611317e-15
+    },
+    "pdlp_cpu": {
+     "status": "optimal",
+     "objective": 1766530.1281221732,
+     "time": 0.12027525901794434,
+     "setup_time": 0.024547815322875977,
+     "iterations": 768,
+     "restarts": 5,
+     "device": "cpu-numpy",
+     "rel_primal_residual": 6.327291709293583e-05,
+     "rel_dual_residual": 3.4162212915790964e-05,
+     "rel_gap": 9.596913554560846e-05,
+     "rel_error_vs_highs": 0.00019123285561814573
+    }
+   }
+  },
+  {
+   "target": 100000,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "results": {
+    "highs": {
+     "status": "optimal",
+     "objective": 8858352.01769039,
+     "time": 4.385173100003158,
+     "rel_error_vs_highs": 0.0
+    },
+    "dual_simplex": {
+     "status": "skipped (size)"
+    },
+    "interior_point": {
+     "status": "skipped (size)"
+    },
+    "pdlp_cpu": {
+     "status": "optimal",
+     "objective": 8858483.403039599,
+     "time": 2.9823293685913086,
+     "setup_time": 0.2864723205566406,
+     "iterations": 1152,
+     "restarts": 6,
+     "device": "cpu-numpy",
+     "rel_primal_residual": 8.092942912377464e-05,
+     "rel_dual_residual": 1.0888772216534137e-05,
+     "rel_gap": 3.705266952972707e-06,
+     "rel_error_vs_highs": 1.4831804939125092e-05
+    }
+   }
+  },
+  {
+   "target": 1000000,
+   "rows": 193442,
+   "cols": 999188,
+   "nnz": 2959896,
+   "results": {
+    "highs": {
+     "status": "optimal",
+     "objective": 55042263.251770295,
+     "time": 417.2582817999937,
+     "rel_error_vs_highs": 0.0
+    },
+    "dual_simplex": {
+     "status": "skipped (size)"
+    },
+    "interior_point": {
+     "status": "skipped (size)"
+    },
+    "pdlp_cpu": {
+     "status": "optimal",
+     "objective": 55033635.044940114,
+     "time": 163.474383354187,
+     "setup_time": 3.9970922470092773,
+     "iterations": 2816,
+     "restarts": 8,
+     "device": "cpu-numpy",
+     "rel_primal_residual": 8.034573205628132e-05,
+     "rel_dual_residual": 3.829842086441167e-06,
+     "rel_gap": 8.477858345229552e-05,
+     "rel_error_vs_highs": 0.0001567560329180991
+    }
+   }
+  }
+ ]
+}

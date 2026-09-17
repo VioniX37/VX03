@@ -1,0 +1,175 @@
+{
+ "meta": {
+  "timestamp": "20260917-081355",
+  "machine": {
+   "platform": "Linux-6.12.90+-x86_64-with-glibc2.35",
+   "processor": "x86_64",
+   "cpu_count": 4,
+   "python": "3.12.13",
+   "cuda": true,
+   "gpu": "Tesla T4"
+  },
+  "time_limit": 900.0,
+  "pdlp_tol": 0.0001,
+  "model": "supply_chain production-distribution LP"
+ },
+ "rows": [
+  {
+   "target": 10000,
+   "rows": 2029,
+   "cols": 9936,
+   "nnz": 29472,
+   "results": {
+    "highs": {
+     "status": "optimal",
+     "objective": 1766192.374110901,
+     "time": 0.16111344699999108,
+     "rel_error_vs_highs": 0.0
+    },
+    "pdlp_cpu": {
+     "status": "optimal",
+     "objective": 1766386.6227533524,
+     "time": 0.2310333251953125,
+     "setup_time": 0.034349918365478516,
+     "iterations": 832,
+     "restarts": 5,
+     "device": "cpu-numpy",
+     "rel_primal_residual": 1.2888407241300802e-05,
+     "rel_dual_residual": 2.5580074646512325e-05,
+     "rel_gap": 6.398937545285013e-05,
+     "rel_error_vs_highs": 0.00010998158824524832
+    },
+    "pdlp_cuda": {
+     "status": "optimal",
+     "objective": 1766387.2822077838,
+     "time": 0.5837361812591553,
+     "setup_time": 0.08379101753234863,
+     "iterations": 832,
+     "restarts": 5,
+     "device": "torch-cuda (Tesla T4)",
+     "rel_primal_residual": 1.3491613315315772e-05,
+     "rel_dual_residual": 2.5537462465255733e-05,
+     "rel_gap": 6.388427568793559e-05,
+     "rel_error_vs_highs": 0.00011035496457788975
+    }
+   }
+  },
+  {
+   "target": 100000,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "results": {
+    "highs": {
+     "status": "optimal",
+     "objective": 8858352.01769039,
+     "time": 3.791283518,
+     "rel_error_vs_highs": 0.0
+    },
+    "pdlp_cpu": {
+     "status": "optimal",
+     "objective": 8857836.287288705,
+     "time": 3.414079427719116,
+     "setup_time": 0.2514796257019043,
+     "iterations": 1216,
+     "restarts": 6,
+     "device": "cpu-numpy",
+     "rel_primal_residual": 8.607858479533137e-05,
+     "rel_dual_residual": 1.2553853530128548e-05,
+     "rel_gap": 4.665180025939527e-05,
+     "rel_error_vs_highs": 5.821967795539538e-05
+    },
+    "pdlp_cuda": {
+     "status": "optimal",
+     "objective": 8858974.996417485,
+     "time": 1.020601749420166,
+     "setup_time": 0.3111293315887451,
+     "iterations": 1152,
+     "restarts": 6,
+     "device": "torch-cuda (Tesla T4)",
+     "rel_primal_residual": 8.12745316721366e-05,
+     "rel_dual_residual": 8.545515993109592e-06,
+     "rel_gap": 3.282023886458612e-05,
+     "rel_error_vs_highs": 7.032670702752862e-05
+    }
+   }
+  },
+  {
+   "target": 1000000,
+   "rows": 193442,
+   "cols": 999188,
+   "nnz": 2959896,
+   "results": {
+    "highs": {
+     "status": "optimal",
+     "objective": 55042263.2517703,
+     "time": 305.74344910099995,
+     "rel_error_vs_highs": 0.0
+    },
+    "pdlp_cpu": {
+     "status": "optimal",
+     "objective": 55033905.461461276,
+     "time": 101.55459666252136,
+     "setup_time": 3.263803243637085,
+     "iterations": 2880,
+     "restarts": 8,
+     "device": "cpu-numpy",
+     "rel_primal_residual": 6.811583516862788e-05,
+     "rel_dual_residual": 2.973580408825503e-06,
+     "rel_gap": 8.141940101207446e-05,
+     "rel_error_vs_highs": 0.0001518431440727145
+    },
+    "pdlp_cuda": {
+     "status": "optimal",
+     "objective": 55036125.7574743,
+     "time": 9.633527517318726,
+     "setup_time": 3.5297014713287354,
+     "iterations": 2944,
+     "restarts": 9,
+     "device": "torch-cuda (Tesla T4)",
+     "rel_primal_residual": 7.866645461842813e-05,
+     "rel_dual_residual": 2.891802938288859e-06,
+     "rel_gap": 6.35101372720601e-05,
+     "rel_error_vs_highs": 0.00011150512230802955
+    }
+   }
+  },
+  {
+   "target": 3000000,
+   "rows": 578890,
+   "cols": 2998300,
+   "nnz": 8881200,
+   "results": {
+    "highs": {
+     "status": "time limit reached",
+     "objective": null,
+     "time": 900.5384828470001
+    },
+    "pdlp_cpu": {
+     "status": "optimal",
+     "objective": 134428396.27679655,
+     "time": 443.16390323638916,
+     "setup_time": 13.377687215805054,
+     "iterations": 3648,
+     "restarts": 9,
+     "device": "cpu-numpy",
+     "rel_primal_residual": 8.325371267472675e-05,
+     "rel_dual_residual": 4.143090823587351e-06,
+     "rel_gap": 5.132364045671847e-05
+    },
+    "pdlp_cuda": {
+     "status": "optimal",
+     "objective": 134432718.34757286,
+     "time": 36.52447581291199,
+     "setup_time": 14.97891640663147,
+     "iterations": 3456,
+     "restarts": 9,
+     "device": "torch-cuda (Tesla T4)",
+     "rel_primal_residual": 9.303366449625315e-05,
+     "rel_dual_residual": 9.90736786026179e-06,
+     "rel_gap": 7.791859710608621e-05
+    }
+   }
+  }
+ ]
+}

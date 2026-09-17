@@ -1,0 +1,364 @@
+{
+ "meta": {
+  "suite": "infeas",
+  "timestamp": "20260917-092011",
+  "time_limit": 60.0,
+  "algorithm": "auto",
+  "machine": {
+   "platform": "Windows-11-10.0.26200-SP0",
+   "processor": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+   "cpu_count": 12,
+   "python": "3.12.6",
+   "cuda": false,
+   "gpu": "None"
+  }
+ },
+ "rows": [
+  {
+   "key": "infeas:itest2",
+   "name": "itest2",
+   "collection": "infeas",
+   "tags": [
+    "infeasible"
+   ],
+   "published_optimum": null,
+   "rows": 9,
+   "cols": 4,
+   "nnz": 17,
+   "int_vars": 0,
+   "q_nnz": 0,
+   "problem_class": "LP",
+   "ours": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.0005261000042082742,
+    "parse_time": 0.000672499998472631,
+    "algorithm": "interior_point",
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "NO_SOLUTION_TO_VERIFY",
+    "max_primal_violation": 0.0,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.0,
+     "strategy": 0.0010004043579101562,
+     "solve": 0.0,
+     "postsolve": 0.0,
+     "certificate": 0.0,
+     "total": 0.0010004043579101562
+    },
+    "class": "LP",
+    "diagnostics": {
+     "infeasibility_certificate": "presolve: Row 'ROW5': minimum activity 13 exceeds upper bound 2."
+    }
+   },
+   "highs": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.00033650000113993883,
+    "parse_time": 0.0008596999978180975,
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": null,
+   "reference_source": null,
+   "rel_error": null,
+   "rel_error_vs_highs": null,
+   "verdict": "correct (infeasible detected)",
+   "ok": true
+  },
+  {
+   "key": "infeas:itest6",
+   "name": "itest6",
+   "collection": "infeas",
+   "tags": [
+    "infeasible"
+   ],
+   "published_optimum": null,
+   "rows": 11,
+   "cols": 8,
+   "nnz": 20,
+   "int_vars": 0,
+   "q_nnz": 0,
+   "problem_class": "LP",
+   "ours": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.000585400004638359,
+    "parse_time": 0.0006446999905165285,
+    "algorithm": "simplex",
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "NO_SOLUTION_TO_VERIFY",
+    "max_primal_violation": 0.0,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.0,
+     "strategy": 0.0,
+     "solve": 0.0,
+     "postsolve": 0.0,
+     "certificate": 0.0009949207305908203,
+     "total": 0.0009949207305908203
+    },
+    "class": "LP",
+    "diagnostics": {
+     "infeasibility_certificate": "presolve: Row 'ROW4': maximum activity -30000 below lower bound 50000."
+    }
+   },
+   "highs": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.0004071000003023073,
+    "parse_time": 0.0010505000100238249,
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": null,
+   "reference_source": null,
+   "rel_error": null,
+   "rel_error_vs_highs": null,
+   "verdict": "correct (infeasible detected)",
+   "ok": true
+  },
+  {
+   "key": "infeas:klein1",
+   "name": "klein1",
+   "collection": "infeas",
+   "tags": [
+    "infeasible"
+   ],
+   "published_optimum": null,
+   "rows": 54,
+   "cols": 54,
+   "nnz": 696,
+   "int_vars": 0,
+   "q_nnz": 0,
+   "problem_class": "LP",
+   "ours": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.02453369999420829,
+    "parse_time": 0.001989800002775155,
+    "algorithm": "interior_point",
+    "iterations": 15,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "NO_SOLUTION_TO_VERIFY",
+    "max_primal_violation": 0.0,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.007997751235961914,
+     "strategy": 0.0010023117065429688,
+     "solve": 0.013998031616210938,
+     "postsolve": 0.0,
+     "certificate": 0.0,
+     "total": 0.023997068405151367
+    },
+    "class": "LP",
+    "diagnostics": {
+     "ipm_iterations": 15,
+     "primal_residual": 1439.208949561278,
+     "dual_residual": 4.774555389187532,
+     "barrier_mu": 3.9826180330568606e-10,
+     "algorithm": "homogeneous self-dual embedding, Mehrotra predictor-corrector",
+     "dual_sign_convention": "minimize-normalized: y_i > 0 row at lower bound, y_i < 0 at upper bound"
+    }
+   },
+   "highs": {
+    "status": "infeasible",
+    "objective": 0.0,
+    "time": 0.003190599993104115,
+    "parse_time": 0.0015564999921480194,
+    "iterations": 134,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": null,
+   "reference_source": null,
+   "rel_error": null,
+   "rel_error_vs_highs": null,
+   "verdict": "correct (infeasible detected)",
+   "ok": true
+  },
+  {
+   "key": "infeas:bgprtr",
+   "name": "bgprtr",
+   "collection": "infeas",
+   "tags": [
+    "infeasible"
+   ],
+   "published_optimum": null,
+   "rows": 20,
+   "cols": 34,
+   "nnz": 64,
+   "int_vars": 0,
+   "q_nnz": 0,
+   "problem_class": "LP",
+   "ours": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.01495539999450557,
+    "parse_time": 0.0008875000057742,
+    "algorithm": "simplex",
+    "iterations": 20,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "NO_SOLUTION_TO_VERIFY",
+    "max_primal_violation": 0.0,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.002996206283569336,
+     "strategy": 0.0,
+     "solve": 0.012001276016235352,
+     "postsolve": 0.0,
+     "certificate": 0.0,
+     "total": 0.014997482299804688
+    },
+    "class": "LP",
+    "diagnostics": {
+     "basis_size": 20,
+     "pricing_method": "devex (primal) / dual steepest edge (dual)",
+     "phase1_iterations": 20,
+     "refactorizations": 2,
+     "dual_sign_convention": "minimize-normalized: y_i > 0 row at lower bound, y_i < 0 at upper bound",
+     "method": "auto"
+    }
+   },
+   "highs": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.0015777000080561265,
+    "parse_time": 0.0013906000094721094,
+    "iterations": 25,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": null,
+   "reference_source": null,
+   "rel_error": null,
+   "rel_error_vs_highs": null,
+   "verdict": "correct (infeasible detected)",
+   "ok": true
+  },
+  {
+   "key": "infeas:woodinfe",
+   "name": "woodinfe",
+   "collection": "infeas",
+   "tags": [
+    "infeasible"
+   ],
+   "published_optimum": null,
+   "rows": 35,
+   "cols": 89,
+   "nnz": 140,
+   "int_vars": 0,
+   "q_nnz": 0,
+   "problem_class": "LP",
+   "ours": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.0023922999971546233,
+    "parse_time": 0.0014238000003388152,
+    "algorithm": "simplex",
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "NO_SOLUTION_TO_VERIFY",
+    "max_primal_violation": 0.0,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.0,
+     "strategy": 0.0009987354278564453,
+     "solve": 0.0,
+     "postsolve": 0.0,
+     "certificate": 0.0,
+     "total": 0.001997709274291992
+    },
+    "class": "LP",
+    "diagnostics": {
+     "infeasibility_certificate": "presolve: Variable 'DWASE1' has empty domain [5.0, -0.0] after presolve."
+    }
+   },
+   "highs": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.0004934000025968999,
+    "parse_time": 0.004018699997686781,
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": null,
+   "reference_source": null,
+   "rel_error": null,
+   "rel_error_vs_highs": null,
+   "verdict": "correct (infeasible detected)",
+   "ok": true
+  },
+  {
+   "key": "infeas:galenet",
+   "name": "galenet",
+   "collection": "infeas",
+   "tags": [
+    "infeasible"
+   ],
+   "published_optimum": null,
+   "rows": 8,
+   "cols": 8,
+   "nnz": 16,
+   "int_vars": 0,
+   "q_nnz": 0,
+   "problem_class": "LP",
+   "ours": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.0006443000020226464,
+    "parse_time": 0.0007724000024609268,
+    "algorithm": "simplex",
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null,
+    "best_bound": null,
+    "certificate": "NO_SOLUTION_TO_VERIFY",
+    "max_primal_violation": 0.0,
+    "duality_gap": null,
+    "timings": {
+     "presolve": 0.0,
+     "strategy": 0.0,
+     "solve": 0.0,
+     "postsolve": 0.0,
+     "certificate": 0.0,
+     "total": 0.0
+    },
+    "class": "LP",
+    "diagnostics": {
+     "infeasibility_certificate": "presolve: Row 'NODE5': maximum activity -10 below lower bound 0."
+    }
+   },
+   "highs": {
+    "status": "infeasible",
+    "objective": null,
+    "time": 0.0003345000004628673,
+    "parse_time": 0.000829399999929592,
+    "iterations": 0,
+    "nodes": 0,
+    "mip_gap": null
+   },
+   "reference": null,
+   "reference_source": null,
+   "rel_error": null,
+   "rel_error_vs_highs": null,
+   "verdict": "correct (infeasible detected)",
+   "ok": true
+  }
+ ]
+}

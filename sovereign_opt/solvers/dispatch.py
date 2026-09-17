@@ -19,6 +19,7 @@ from sovereign_opt.ml.strategy import MLStrategyEngine, StrategyRecommendation
 from sovereign_opt.solvers.base import SolverResult, SolverStatus
 from sovereign_opt.solvers.lp.simplex import RevisedSimplexSolver, lp_result_from_engine
 from sovereign_opt.solvers.lp.interior_point import InteriorPointSolver, crossover
+from sovereign_opt.solvers.lp.pdlp import PDLPSolver
 from sovereign_opt.solvers.lp.standard_form import BoundedForm
 from sovereign_opt.solvers.lp.simplex_engine import LPStatus
 from sovereign_opt.solvers.milp.branch_bound import BranchAndBoundSolver
@@ -27,9 +28,9 @@ from sovereign_opt.solvers.qp.interior_point_qp import QPInteriorPointSolver
 from sovereign_opt.solvers.qp.polish import recover_duals
 from sovereign_opt.validation.validator import IndependentValidator, ValidationCertificate
 
-LP_ALGORITHMS = ("simplex", "dual_simplex", "interior_point")
+LP_ALGORITHMS = ("simplex", "dual_simplex", "interior_point", "pdlp", "hybrid_pdlp")
 QP_ALGORITHMS = ("qp_interior_point", "active_set")
-ALL_ALGORITHMS = ("auto",) + LP_ALGORITHMS + ("branch_and_bound",) + QP_ALGORITHMS
+ALL_ALGORITHMS = ("auto", "concurrent") + LP_ALGORITHMS + ("branch_and_bound",) + QP_ALGORITHMS
 
 
 @dataclass
@@ -57,6 +58,13 @@ def make_solver(algorithm: str, time_limit_seconds: float):
         return solver
     if algorithm == "interior_point":
         return InteriorPointSolver()
+    if algorithm == "pdlp":
+        return PDLPSolver(tol=1e-7, crossover=False)
+    if algorithm == "hybrid_pdlp":
+        return PDLPSolver(tol=1e-6, crossover=True)
+    if algorithm == "concurrent":
+        from sovereign_opt.solvers.concurrent import ConcurrentSolver
+        return ConcurrentSolver()
     if algorithm == "branch_and_bound":
         return BranchAndBoundSolver(time_limit_seconds=time_limit_seconds)
     if algorithm == "active_set":
@@ -67,6 +75,8 @@ def make_solver(algorithm: str, time_limit_seconds: float):
 
 
 def compatible_algorithm(algorithm: str, problem_class: str, notes: List[str]) -> str:
+    if algorithm == "concurrent":
+        return algorithm
     if problem_class in ("MILP", "MIQP"):
         if algorithm != "branch_and_bound":
             notes.append(f"'{algorithm}' cannot enforce integrality on a {problem_class}; using branch_and_bound.")
@@ -166,6 +176,19 @@ def solve_model(
     else:
         remaining = max(0.1, time_limit_seconds - (time.time() - t_start))
         core = solver.solve(model_to_solve, time_limit_seconds=remaining)
+        # Robustness fallback: an LP method that stalls (iteration cap / numerical trouble) hands over to
+        # dual simplex, which is exact and the most reliable method on degenerate or badly scaled LPs.
+        remaining = time_limit_seconds - (time.time() - t_start)
+        if (problem_class == "LP" and chosen != "dual_simplex" and remaining > 1.0
+                and core.status in (SolverStatus.ITERATION_LIMIT, SolverStatus.NUMERICAL_ERROR, SolverStatus.UNSOLVED)):
+            notes.append(f"'{chosen}' stopped with status '{core.status.value}'; falling back to dual simplex.")
+            first = core
+            solver = make_solver("dual_simplex", remaining)
+            core = solver.solve(model_to_solve, time_limit_seconds=remaining)
+            core.diagnostics["fallback_from"] = {"algorithm": chosen, "status": first.status.value,
+                                                 "iterations": first.iterations}
+            core.iterations += first.iterations
+            chosen = "dual_simplex"
     core.runtime_seconds = time.time() - t0
     timings["solve"] = core.runtime_seconds
 

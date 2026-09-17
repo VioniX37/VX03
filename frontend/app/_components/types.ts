@@ -184,3 +184,40 @@ export interface SolveResult {
 }
 
 export type ViewId = 1 | 2 | 3 | 4 | 5 | 6;
+
+export interface BenchRow {
+  name: string;
+  tags: string[];
+  note?: string | null;
+  rows: number;
+  cols: number;
+  nnz?: number;
+  int_vars?: number;
+  reference: number | null;
+  reference_source?: string | null;
+  rel_error: number | null;
+  rel_error_vs_highs: number | null;
+  verdict: string;
+  ok: boolean;
+  range_before?: number | null;
+  range_after?: number | null;
+  ours: { status: string | null; objective: number | null; time: number | null; algorithm?: string | null; iterations?: number | null; nodes?: number | null; mip_gap?: number | null; certificate?: string | null };
+  highs: { status: string | null; objective: number | null; time: number | null; iterations?: number | null; nodes?: number | null; mip_gap?: number | null };
+  counters?: Partial<Record<"degenerate_pivots" | "bound_perturbations" | "bland_pivots" | "basis_repairs" | "numerical_recoveries", number>>;
+}
+
+export interface ScaleRow {
+  target: number;
+  rows: number;
+  cols: number;
+  nnz: number;
+  results: Record<string, { status: string; objective?: number | null; time?: number; rel_error_vs_highs?: number; device?: string; iterations?: number }>;
+}
+
+export interface BenchSuite {
+  meta: { timestamp?: string; time_limit?: number; pdlp_tol?: number; machine?: { cpu_count?: number; gpu?: string | null; platform?: string } };
+  file: string;
+  rows: BenchRow[];
+}
+
+export type Benchmarks = Record<string, BenchSuite>;
