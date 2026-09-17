@@ -1,7 +1,7 @@
 """
 Primal heuristics for finding integer feasible solutions early.
 Implements:
-- Simple rounding
+- Simple rounding, directional (up / down) rounding with continuous completion
 - Fractional diving (warm-started dual simplex, one backtrack per level)
 - Feasibility pump for binary programs (L1 distance objective, random flips against cycling)
 - RINS (Relaxation Induced Neighborhood Search) via a small sub-MIP
@@ -53,6 +53,26 @@ def copy_model_with_bounds(model: OptimizationModel, overrides: Dict[str, tuple]
     sub.set_objective(dict(model.objective.linear_coefficients), sense=model.objective.sense,
                       quadratic_coefficients=dict(model.objective.quadratic_coefficients), offset=model.objective.offset)
     return sub
+
+
+def directional_rounding(bc, x_struct: np.ndarray) -> bool:
+    """
+    Round every fractional integer variable UP, then DOWN, fix the integers and re-optimize the continuous
+    part (one LP each). Rounding up satisfies covering structure (commitment / reserve / facility opening),
+    rounding down satisfies packing structure. Cheap, and on industrial models often the first incumbent.
+    """
+    ints = bc.int_idx
+    found = False
+    for op in (np.ceil, np.floor):
+        x = np.array(x_struct, dtype=np.float64)
+        v = x[ints]
+        frac = np.abs(v - np.round(v)) > bc.int_tol
+        if not frac.any():
+            break
+        v[frac] = op(v[frac])
+        x[ints] = v
+        found = bc.fix_and_complete(x, "rounding") or found
+    return found
 
 
 def fractional_dive(bc, lb: np.ndarray, ub: np.ndarray, basis, max_depth: int = 60, max_lp_iterations: int = 5000) -> bool:

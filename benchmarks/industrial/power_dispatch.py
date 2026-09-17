@@ -74,3 +74,53 @@ def build_unit_commitment_model(time_periods: int = 4) -> OptimizationModel:
 
     model.set_objective(linear_coefficients=obj_coeffs, sense=ObjectiveSense.MINIMIZE)
     return model
+
+
+def build_unit_commitment_fleet(num_generators: int = 20, time_periods: int = 48, seed: int = 5) -> OptimizationModel:
+    """
+    Scalable unit commitment (MILP) for a regional fleet: on/off (u), start-up (v) and output (p) per
+    generator and hour, with min / max output, ramp limits, start-up costs and a spinning-reserve
+    requirement. Synthetic fleet with a fixed seed; 3 * G * T variables (2 * G * T binaries).
+    """
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    G, T = num_generators, time_periods
+    kind = rng.choice(["coal", "ccgt", "peaker", "hydro"], size=G, p=[0.35, 0.3, 0.25, 0.1])
+    spec = {"coal": (150, 500, 22, 3000, 0.35), "ccgt": (60, 350, 38, 900, 0.6),
+            "peaker": (15, 120, 80, 250, 1.0), "hydro": (10, 200, 12, 150, 0.9)}
+    pmin = np.array([spec[k][0] for k in kind]) * rng.uniform(0.8, 1.2, G)
+    pmax = np.array([spec[k][1] for k in kind]) * rng.uniform(0.8, 1.2, G)
+    cost = np.array([spec[k][2] for k in kind]) * rng.uniform(0.9, 1.1, G)
+    start = np.array([spec[k][3] for k in kind]) * rng.uniform(0.8, 1.2, G)
+    ramp = np.array([spec[k][4] for k in kind]) * pmax
+    base = 0.62 * pmax.sum()
+    demand = [round(base * (0.55 + 0.45 * (0.5 - 0.5 * math.cos(2 * math.pi * ((t % 24) - 5) / 24))), 1) for t in range(T)]
+
+    model = OptimizationModel(name=f"Unit_Commitment_Fleet_G{G}_T{T}")
+    obj = {}
+    for g in range(G):
+        for t in range(T):
+            u, v, p = f"u_{g}_{t}", f"v_{g}_{t}", f"p_{g}_{t}"
+            model.add_variable(u, 0.0, 1.0, VariableType.BINARY)
+            model.add_variable(v, 0.0, 1.0, VariableType.BINARY)
+            model.add_variable(p, 0.0, float(pmax[g]))
+            obj[p] = float(cost[g])
+            obj[u] = float(0.05 * cost[g] * pmin[g])  # no-load cost
+            obj[v] = float(start[g])
+            model.add_constraint(f"max_{g}_{t}", {p: 1.0, u: -float(pmax[g])}, ConstraintSense.LE, rhs=0.0)
+            model.add_constraint(f"min_{g}_{t}", {p: 1.0, u: -float(pmin[g])}, ConstraintSense.GE, rhs=0.0)
+            if t == 0:
+                model.add_constraint(f"start_{g}_{t}", {v: 1.0, u: -1.0}, ConstraintSense.GE, rhs=0.0)
+            else:
+                model.add_constraint(f"start_{g}_{t}", {v: 1.0, u: -1.0, f"u_{g}_{t-1}": 1.0}, ConstraintSense.GE, rhs=0.0)
+                model.add_constraint(f"rampup_{g}_{t}", {p: 1.0, f"p_{g}_{t-1}": -1.0, v: -float(pmax[g])},
+                                     ConstraintSense.LE, rhs=float(ramp[g]))
+                model.add_constraint(f"rampdn_{g}_{t}", {f"p_{g}_{t-1}": 1.0, p: -1.0}, ConstraintSense.LE,
+                                     rhs=float(max(ramp[g], pmax[g])))
+    for t in range(T):
+        model.add_constraint(f"demand_{t}", {f"p_{g}_{t}": 1.0 for g in range(G)}, ConstraintSense.GE, rhs=demand[t])
+        model.add_constraint(f"reserve_{t}", {f"u_{g}_{t}": float(pmax[g]) for g in range(G)}, ConstraintSense.GE,
+                             rhs=1.1 * demand[t])
+    model.set_objective(obj, ObjectiveSense.MINIMIZE)
+    return model

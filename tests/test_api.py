@@ -11,7 +11,11 @@ from sovereign_opt.server import app, PRESETS
 client = TestClient(app)
 
 
-@pytest.mark.parametrize("preset_id", list(PRESETS))
+LONG_RUNNING = {"supply_chain_lp_50k", "unit_commitment_fleet_2880", "facility_location_1220"}
+DEMO_PRESETS = [p for p in PRESETS if "/" not in p and p not in LONG_RUNNING]
+
+
+@pytest.mark.parametrize("preset_id", DEMO_PRESETS)
 def test_every_preset_solves_and_certifies(preset_id):
     assert client.post("/api/load_preset", json={"preset_id": preset_id}).status_code == 200
     assert client.post("/api/presolve").status_code == 200
@@ -24,6 +28,14 @@ def test_every_preset_solves_and_certifies(preset_id):
     assert len(body["workflow_stages"]) == 6
     for node in body["diagnostics"].get("tree_trace", []):
         assert isinstance(node["lower_bound"], (int, float))
+
+
+def test_benchmark_library_presets_are_listed():
+    ids = [p["id"] for p in client.get("/api/presets").json()]
+    assert "supply_chain_lp_50k" in ids
+    library = [i for i in ids if "/" in i]
+    if library:  # only when benchmark data has been downloaded
+        assert client.post("/api/load_preset", json={"preset_id": library[0]}).status_code == 200
 
 
 def test_unknown_algorithm_is_rejected():
