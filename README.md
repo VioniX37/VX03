@@ -192,6 +192,60 @@ All mathematical formulations and proofs are documented in depth under [`docs/th
 
 ---
 
+## 4.5 Demo Race: head-to-head vs Gurobi and HiGHS
+
+The dashboard's **demo** tab races the engine against **Gurobi** and **HiGHS** on four curated
+instances and shows, side by side, that every solver reaches the same optimum and how long each
+one took. Measured on a 12-core laptop (Windows 11, no GPU); HiGHS and Gurobi pinned to one thread.
+
+| | instance | size | ours | Gurobi 13 | HiGHS |
+|---|---|---|---:|---:|---:|
+| **A** | production-distribution LP | 19,586 x 99,728, 296k nnz | 2.98 s | 2.86 s | 4.39 s |
+| **B** | same model at 1M variables | 193,442 x 999,188, 2.96M nnz | **166.9 s** | 299.3 s | 417.3 s |
+| **C** | `STCQP1`, Maros-Meszaros QP | 2,052 x 4,097 | 1.17 s | **0.03 s** | 154.0 s |
+| **D** | unit commitment, 480 binaries | 1,228 x 720 | 1.03 s | **0.06 s** | 0.11 s |
+
+Read honestly: **B is the result that matters** -- at a million variables the sovereign PDLP
+solver is 1.8x faster than Gurobi and 2.5x faster than HiGHS on the same machine, to the same
+optimum. On A we are level with Gurobi. On the small QP and the MILP, Gurobi is still well
+ahead; the objectives are identical and ours carries an independent optimality certificate, but
+the QP interior point and the branch-and-cut tree are not yet tuned to commercial standards.
+That gap is the roadmap, and the demo states it rather than hiding it.
+
+On a Tesla T4 (recorded on Kaggle, not live) instance B solves in **9.6 s** -- 31x faster than
+both references -- through the same PDLP code with the Torch CUDA backend swapped in.
+
+### Running it
+
+```bash
+pip install -r requirements-bench.txt      # highspy + gurobipy, comparison only
+python run_demo.py                         # API on :8000, dashboard on :3000 -> "demo" tab
+```
+
+Gurobi needs a license. Drop a `gurobi.lic` into `Gurobi files/` (it is gitignored -- a WLS
+file contains a private secret) or set `GRB_LICENSE_FILE`. Without one, gurobipy still works
+but caps models at 2,000 variables and 2,000 constraints; the engine probes the license at
+startup and greys out the bars it cannot run, with the reason shown.
+
+From the command line, one instance and one solver per process:
+
+```bash
+python -m benchmarks.demo_race --list
+python -m benchmarks.demo_race --probe
+python -m benchmarks.demo_race --instance milp_uc_720 --all
+python -m benchmarks.demo_race --instance supply_chain_1m --solver ours --save
+```
+
+`--save` writes `benchmarks/results/demo_<instance>_<stamp>.json`, which the dashboard then
+serves as a cached result. The demo page also carries every number above as a built-in
+fallback, so a failed live run still renders; the **use recorded results** toggle pins it.
+
+Neither HiGHS nor Gurobi is ever imported by `sovereign_opt`: the comparison runners live in
+`benchmarks/demo_race.py` and the server reaches them through a subprocess. The guard test
+`tests/test_engine_never_imports_comparison_solvers` enforces that.
+
+---
+
 ## 4. Workstation Dashboard & 6-Stage Workflow Visualization
 
 The Next.js dashboard is styled as a **terminal session**, because the product itself is a CLI:

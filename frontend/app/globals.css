@@ -124,3 +124,8 @@ select option {
     transition-duration: 1ms !important;
   }
 }
+
+/* Demo page: read from the back of the room. */
+.demo-root {
+  font-size: 15px;
+}

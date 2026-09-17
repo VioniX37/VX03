@@ -1,0 +1,85 @@
+{
+ "job_id": "db5b3f948a14",
+ "instance_id": "qp_stcqp1",
+ "source": "live",
+ "state": "done",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789673359.581218,
+ "solvers": {
+  "ours": {
+   "instance": "qp_stcqp1",
+   "solver": "ours",
+   "time_limit": 300.0,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "build_time": 0.028110300000008692,
+   "status": "optimal",
+   "objective": 155143.55470911262,
+   "solve_time": 1.1740304999999864,
+   "algorithm": "qp_interior_point",
+   "iterations": 11,
+   "nodes": 0,
+   "mip_gap": null,
+   "best_bound": null,
+   "certificate": "FEASIBLE_CERTIFIED",
+   "max_primal_violation": 0.0,
+   "duality_gap": null,
+   "state": "done"
+  },
+  "highs": {
+   "instance": "qp_stcqp1",
+   "solver": "highs",
+   "time_limit": 300.0,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "build_time": 0.005023600000015449,
+   "status": "optimal",
+   "objective": 155143.55470395752,
+   "solve_time": 154.0401462,
+   "iterations": 0,
+   "nodes": 0,
+   "state": "done"
+  },
+  "gurobi": {
+   "state": "skipped",
+   "status": "skipped",
+   "note": "free size-limited Gurobi license: at most 2,000 variables and 2,000 constraints. This model has 4,097 and 2,052."
+  }
+ },
+ "objective_match": {
+  "reference": "highs",
+  "values": {
+   "ours": 155143.55470911262,
+   "highs": 155143.55470395752
+  },
+  "rel_error": {
+   "ours": 3.3227956462498324e-11,
+   "highs": 0.0
+  }
+ },
+ "speedup": {
+  "vs_highs": 131.20625588517657,
+  "vs_gurobi": null
+ },
+ "recorded": {
+  "ours": {
+   "time": 1.125,
+   "objective": 155143.5547,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 147.448,
+   "objective": 155143.5547,
+   "status": "optimal"
+  },
+  "source": "qp-large_20260917-101301.json"
+ },
+ "gpu_panel": null,
+ "elapsed": 158.16114974021912
+}

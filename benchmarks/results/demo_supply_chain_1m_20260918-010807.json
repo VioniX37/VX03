@@ -1,0 +1,15 @@
+{
+ "instance": "supply_chain_1m",
+ "solver": "gurobi",
+ "time_limit": 900.0,
+ "rows": 193442,
+ "cols": 999188,
+ "nnz": 2959896,
+ "build_time": 0.7994638000000123,
+ "int_vars": 0,
+ "status": "optimal",
+ "objective": 55042263.25177029,
+ "solve_time": 299.252239,
+ "nodes": 0,
+ "version": "13.0.3"
+}

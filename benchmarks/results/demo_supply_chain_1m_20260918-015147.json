@@ -1,0 +1,112 @@
+{
+ "job_id": "7852b3df3805",
+ "instance_id": "supply_chain_1m",
+ "source": "live",
+ "state": "done",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789674823.5681899,
+ "solvers": {
+  "ours": {
+   "instance": "supply_chain_1m",
+   "solver": "ours",
+   "time_limit": 900.0,
+   "rows": 193442,
+   "cols": 999188,
+   "nnz": 2959896,
+   "build_time": 0.8014597999999751,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 55033635.044940114,
+   "solve_time": 276.9399070999998,
+   "algorithm": "pdlp",
+   "iterations": 2816,
+   "restarts": 8,
+   "device": "cpu-numpy",
+   "rel_gap": 8.477858345229552e-05,
+   "rel_primal_residual": 8.034573205628132e-05,
+   "rel_dual_residual": 3.829842086441167e-06,
+   "state": "done"
+  },
+  "highs": {
+   "instance": "supply_chain_1m",
+   "solver": "highs",
+   "time_limit": 900.0,
+   "rows": 193442,
+   "cols": 999188,
+   "nnz": 2959896,
+   "build_time": 1.4333640999998352,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 55042263.251770295,
+   "solve_time": 815.9832920000001,
+   "state": "done"
+  },
+  "gurobi": {
+   "instance": "supply_chain_1m",
+   "solver": "gurobi",
+   "time_limit": 900.0,
+   "rows": 193442,
+   "cols": 999188,
+   "nnz": 2959896,
+   "build_time": 1.6716578999999,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 55042263.25177029,
+   "solve_time": 571.6206621000001,
+   "nodes": 0,
+   "version": "13.0.3",
+   "state": "done"
+  }
+ },
+ "objective_match": {
+  "reference": "highs",
+  "values": {
+   "ours": 55033635.044940114,
+   "highs": 55042263.251770295,
+   "gurobi": 55042263.25177029
+  },
+  "rel_error": {
+   "ours": 0.0001567560329180991,
+   "highs": 0.0,
+   "gurobi": 1.3536108722208474e-16
+  }
+ },
+ "speedup": {
+  "vs_highs": 2.9464272612229845,
+  "vs_gurobi": 2.0640602796678
+ },
+ "recorded": {
+  "ours": {
+   "time": 166.91,
+   "objective": 55033635.044940114,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 417.26,
+   "objective": 55042263.251770295,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 299.25,
+   "objective": 55042263.25177029,
+   "status": "optimal"
+  },
+  "source": "scale_20260917-105038.json + measured 20260918"
+ },
+ "gpu_panel": {
+  "device": "Tesla T4",
+  "ours": 9.6335,
+  "highs": 305.7434,
+  "speedup": 31.7,
+  "gurobi": 299.25,
+  "rows": 193442,
+  "cols": 999188,
+  "source": "scale_kaggle_gpu_20260917-081355.json",
+  "note": "prior recorded run on a Kaggle Tesla T4 (4 vCPU) -- not this laptop, not live."
+ },
+ "elapsed": 1684.0335261821747
+}

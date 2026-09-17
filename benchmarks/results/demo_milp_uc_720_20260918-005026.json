@@ -1,0 +1,101 @@
+{
+ "job_id": "29a5c005d6d4",
+ "instance_id": "milp_uc_720",
+ "source": "live",
+ "state": "done",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789672818.219691,
+ "solvers": {
+  "ours": {
+   "instance": "milp_uc_720",
+   "solver": "ours",
+   "time_limit": 300.0,
+   "rows": 1228,
+   "cols": 720,
+   "nnz": 3300,
+   "int_vars": 480,
+   "build_time": 0.012596800021128729,
+   "status": "optimal",
+   "objective": 868889.9109681123,
+   "solve_time": 2.185065300000133,
+   "algorithm": "branch_and_bound",
+   "iterations": 1009,
+   "nodes": 1,
+   "mip_gap": 0.0,
+   "best_bound": 868889.9109681123,
+   "certificate": "OPTIMAL_CERTIFIED",
+   "max_primal_violation": 2.2737367544323206e-13,
+   "duality_gap": 0.0,
+   "state": "done"
+  },
+  "highs": {
+   "instance": "milp_uc_720",
+   "solver": "highs",
+   "time_limit": 300.0,
+   "rows": 1228,
+   "cols": 720,
+   "nnz": 3300,
+   "int_vars": 480,
+   "build_time": 0.014743899984750897,
+   "status": "optimal",
+   "objective": 868889.9109681122,
+   "solve_time": 0.20602660000440665,
+   "iterations": 452,
+   "nodes": 1,
+   "state": "done"
+  },
+  "gurobi": {
+   "instance": "milp_uc_720",
+   "solver": "gurobi",
+   "time_limit": 300.0,
+   "rows": 1228,
+   "cols": 720,
+   "nnz": 3300,
+   "int_vars": 480,
+   "build_time": 0.013440899987472221,
+   "status": "optimal",
+   "objective": 868889.9109681123,
+   "solve_time": 0.06098989999736659,
+   "nodes": 1,
+   "version": "13.0.3",
+   "mip_gap": 2.2776883999640804e-15,
+   "state": "done"
+  }
+ },
+ "objective_match": {
+  "reference": "highs",
+  "values": {
+   "ours": 868889.9109681123,
+   "highs": 868889.9109681122,
+   "gurobi": 868889.9109681123
+  },
+  "rel_error": {
+   "ours": 1.3398167058612238e-16,
+   "highs": 0.0,
+   "gurobi": 1.3398167058612238e-16
+  }
+ },
+ "speedup": {
+  "vs_highs": 0.09428853224862163,
+  "vs_gurobi": 0.027912163539168776
+ },
+ "recorded": {
+  "ours": {
+   "time": 1.03,
+   "objective": 868889.9109681123,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 0.11,
+   "objective": 868889.9109681122,
+   "status": "optimal"
+  },
+  "source": "milpscale_20260917-143744.json"
+ },
+ "gpu_panel": null,
+ "elapsed": 8.597406148910522
+}

@@ -1,4 +1,4 @@
-import type { Benchmarks, MLRecommendation, ModelMetadata, Preset, PresolveData, SolveResult, SystemInfo } from "./types";
+import type { Benchmarks, DemoInstance, DemoJob, MLRecommendation, ModelMetadata, Preset, PresolveData, SolveResult, SystemInfo } from "./types";
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
@@ -45,4 +45,10 @@ export const api = {
       "/api/solve",
       postJson({ algorithm, enable_presolve: enablePresolve, time_limit_seconds: timeLimitSeconds }),
     ),
+
+  demoInstances: () => request<DemoInstance[]>("/api/demo/instances"),
+  demoStart: (instanceId: string, useRecorded = false, force = false) =>
+    request<DemoJob>("/api/demo/race", postJson({ instance_id: instanceId, use_recorded: useRecorded, force })),
+  demoJob: (jobId: string) => request<DemoJob>(`/api/demo/race/${jobId}`),
+  demoCancel: (jobId: string) => request<DemoJob>(`/api/demo/race/${jobId}/cancel`, { method: "POST" }),
 };
