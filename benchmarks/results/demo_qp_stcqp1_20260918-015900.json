@@ -1,0 +1,102 @@
+{
+ "job_id": "a5907398fb6e",
+ "instance_id": "qp_stcqp1",
+ "source": "live",
+ "state": "done",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789676634.4828484,
+ "solvers": {
+  "ours": {
+   "instance": "qp_stcqp1",
+   "solver": "ours",
+   "time_limit": 300.0,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "build_time": 0.004668500000207132,
+   "status": "optimal",
+   "objective": 155143.55470911262,
+   "solve_time": 1.1302192999996805,
+   "algorithm": "qp_interior_point",
+   "iterations": 11,
+   "nodes": 0,
+   "mip_gap": null,
+   "best_bound": null,
+   "certificate": "FEASIBLE_CERTIFIED",
+   "max_primal_violation": 0.0,
+   "duality_gap": null,
+   "state": "done"
+  },
+  "highs": {
+   "instance": "qp_stcqp1",
+   "solver": "highs",
+   "time_limit": 300.0,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "build_time": 0.0040376000001742796,
+   "status": "optimal",
+   "objective": 155143.55470395752,
+   "solve_time": 299.80741639999997,
+   "iterations": 0,
+   "nodes": 0,
+   "state": "done"
+  },
+  "gurobi": {
+   "instance": "qp_stcqp1",
+   "solver": "gurobi",
+   "time_limit": 300.0,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "build_time": 0.005698699999811652,
+   "status": "optimal",
+   "objective": 155143.55474395794,
+   "solve_time": 0.01650870000003124,
+   "nodes": 0,
+   "version": "13.0.3",
+   "state": "done"
+  }
+ },
+ "objective_match": {
+  "reference": "highs",
+  "values": {
+   "ours": 155143.55470911262,
+   "highs": 155143.55470395752,
+   "gurobi": 155143.55474395794
+  },
+  "rel_error": {
+   "ours": 3.3227956462498324e-11,
+   "highs": 0.0,
+   "gurobi": 2.5782844199609064e-10
+  }
+ },
+ "speedup": {
+  "vs_highs": 265.26481754477624,
+  "vs_gurobi": 0.01460663430542719
+ },
+ "recorded": {
+  "ours": {
+   "time": 1.174,
+   "objective": 155143.55470911262,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 154.04,
+   "objective": 155143.55470395752,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 0.0286,
+   "objective": 155143.55474395794,
+   "status": "optimal"
+  },
+  "source": "qp-large_20260917-101301.json + measured 20260918"
+ },
+ "gpu_panel": null,
+ "elapsed": 305.75855112075806
+}

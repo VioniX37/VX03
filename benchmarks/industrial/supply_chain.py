@@ -19,7 +19,7 @@ Objective: minimise production-weighted transport cost (distance based).
 `build_supply_chain_arrays` builds the sparse matrix directly (vectorised, suitable for millions
 of variables); `build_supply_chain_model` wraps small instances as an OptimizationModel.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 import scipy.sparse as sp
 
@@ -37,6 +37,7 @@ class LPArrays:
     row_ub: np.ndarray
     col_lb: np.ndarray
     col_ub: np.ndarray
+    meta: dict = field(default_factory=dict)  # generator data (sizes, nearest warehouses, demand, capacities)
 
     @property
     def shape(self):
@@ -126,7 +127,10 @@ def build_supply_chain_arrays(plants: int, warehouses: int, customers: int, prod
     A = sp.csr_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))), shape=(r0, n))
     return LPArrays(name=f"supply_chain_P{P}_W{W}_C{C}_K{K}", A=A, c=c,
                     row_lb=np.concatenate(rlb), row_ub=np.concatenate(rub),
-                    col_lb=np.zeros(n), col_ub=np.full(n, np.inf))
+                    col_lb=np.zeros(n), col_ub=np.full(n, np.inf),
+                    meta={"plants": P, "warehouses": W, "customers": C, "products": K, "neighbours": L,
+                          "near": near, "distance": dist, "demand": demand, "plant_capacity": cap_p,
+                          "warehouse_throughput": thr_w})
 
 
 def arrays_to_model(lp: LPArrays) -> OptimizationModel:

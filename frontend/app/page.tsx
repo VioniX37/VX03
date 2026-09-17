@@ -17,6 +17,7 @@ import {
   statusTone,
 } from "./_components/views";
 import { BenchmarksView } from "./_components/bench";
+import { DemoView } from "./_components/demo";
 
 const METHODS = [
   { value: "auto", label: "auto (engine picks)" },
@@ -74,7 +75,7 @@ export default function Workbench() {
   const [lastCommand, setLastCommand] = useState("");
 
   const [view, setView] = useState<ViewId>(1);
-  const [page, setPage] = useState<"workbench" | "benchmarks">("workbench");
+  const [page, setPage] = useState<"workbench" | "benchmarks" | "demo">("workbench");
   const [algorithm, setAlgorithm] = useState("auto");
   const [timeLimit, setTimeLimit] = useState("60");
   const [enablePresolve, setEnablePresolve] = useState(true);
@@ -237,6 +238,7 @@ export default function Workbench() {
       const el = e.target as HTMLElement | null;
       const typing = !!el && ["INPUT", "SELECT", "TEXTAREA"].includes(el.tagName);
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        if (page !== "workbench") return;
         e.preventDefault();
         void solve();
         return;
@@ -280,7 +282,7 @@ export default function Workbench() {
           <span className="text-faint">{systemInfo?.engine_version ? `v${systemInfo.engine_version}` : ""}</span>
           <span className="text-faint">│</span>
           <span className="flex gap-1" role="tablist" aria-label="page">
-            {(["workbench", "benchmarks"] as const).map((p) => (
+            {(["demo", "workbench", "benchmarks"] as const).map((p) => (
               <button
                 key={p}
                 role="tab"
@@ -303,7 +305,11 @@ export default function Workbench() {
         </div>
       </header>
 
-      {page === "benchmarks" ? (
+      {page === "demo" ? (
+        <main className="demo-root mx-auto w-full max-w-[1360px] flex-1 px-4 pb-10 pt-7 sm:px-6">
+          <DemoView />
+        </main>
+      ) : page === "benchmarks" ? (
         <main className="mx-auto w-full max-w-[1360px] flex-1 px-4 pb-10 pt-7 sm:px-6">
           <BenchmarksView />
         </main>
@@ -475,7 +481,9 @@ export default function Workbench() {
       )}
 
       {/* mode line */}
-      <footer className="sticky bottom-0 z-40 border-t border-line bg-bg/95 backdrop-blur-sm">
+      <footer
+        className={`sticky bottom-0 z-40 border-t border-line bg-bg/95 backdrop-blur-sm ${page === "demo" ? "hidden" : ""}`}
+      >
         <div className="mx-auto flex h-8 max-w-[1360px] items-center gap-3 px-4 text-[12.5px] sm:px-6">
           <span className="bg-amber px-1.5 text-bg">{VIEWS[view - 1].label}</span>
           {busy ? (

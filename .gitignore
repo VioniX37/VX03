@@ -121,3 +121,8 @@ tmp/
 
 # --- Benchmark data (downloaded by benchmarks/fetch.py) ---
 benchmarks/data/
+
+# Gurobi WLS / named-user license: contains a private secret, never commit it.
+# benchmarks/demo_race.py reads it from "Gurobi files/gurobi.lic" at run time.
+*.lic
+gurobi.lic

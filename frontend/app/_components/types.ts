@@ -221,3 +221,91 @@ export interface BenchSuite {
 }
 
 export type Benchmarks = Record<string, BenchSuite>;
+
+
+// ------------------------------------------------------------------ demo race
+export type DemoSolverKey = "ours" | "highs" | "gurobi";
+
+export interface DemoSolverSpec {
+  key: DemoSolverKey;
+  label: string;
+  applicable: boolean;
+  skip_reason: string | null;
+}
+
+export interface DemoRecordedEntry {
+  time: number | null;
+  objective: number | null;
+  status?: string | null;
+}
+
+export interface DemoGpuPanel {
+  device: string;
+  ours: number;
+  highs: number;
+  gurobi?: number | null;
+  speedup: number;
+  rows: number;
+  cols: number;
+  source: string;
+  note: string;
+}
+
+export interface DemoInstance {
+  id: string;
+  letter: string;
+  title: string;
+  industry: string;
+  story: string;
+  problem_class: string;
+  size: { rows: number; cols: number; nnz: number; int_vars?: number };
+  solvers: DemoSolverSpec[];
+  long_running: boolean;
+  hidden: boolean;
+  default_time_limit: number;
+  recorded: Record<string, DemoRecordedEntry | string | undefined>;
+  gpu_panel: DemoGpuPanel | null;
+  notes: Record<string, string>;
+  cached: boolean;
+}
+
+export type DemoSolverState = "queued" | "running" | "done" | "error" | "skipped" | "cancelled";
+
+export interface DemoSolverResult {
+  state: DemoSolverState;
+  status?: string | null;
+  objective?: number | null;
+  solve_time?: number | null;
+  build_time?: number | null;
+  elapsed?: number | null;
+  iterations?: number | null;
+  restarts?: number | null;
+  nodes?: number | null;
+  algorithm?: string | null;
+  certificate?: string | null;
+  device?: string | null;
+  mip_gap?: number | null;
+  version?: string | null;
+  note?: string | null;
+  error?: string | null;
+}
+
+export interface DemoJob {
+  job_id: string;
+  instance_id: string;
+  source: "live" | "cache" | "recorded";
+  state: "running" | "done" | "cancelled" | "error";
+  order: DemoSolverKey[];
+  started_at: number;
+  elapsed?: number;
+  solvers: Record<string, DemoSolverResult>;
+  objective_match: {
+    reference: string | null;
+    values: Record<string, number>;
+    rel_error: Record<string, number>;
+  };
+  speedup: { vs_highs: number | null; vs_gurobi: number | null };
+  recorded: DemoInstance["recorded"];
+  gpu_panel: DemoGpuPanel | null;
+  source_file?: string;
+}

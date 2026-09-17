@@ -1,0 +1,20 @@
+{
+ "instance": "supply_chain_1m",
+ "solver": "ours",
+ "time_limit": 900.0,
+ "rows": 193442,
+ "cols": 999188,
+ "nnz": 2959896,
+ "build_time": 0.7969502999999349,
+ "int_vars": 0,
+ "status": "optimal",
+ "objective": 55033635.044940114,
+ "solve_time": 166.90856970000004,
+ "algorithm": "pdlp",
+ "iterations": 2816,
+ "restarts": 8,
+ "device": "cpu-numpy",
+ "rel_gap": 8.477858345229552e-05,
+ "rel_primal_residual": 8.034573205628132e-05,
+ "rel_dual_residual": 3.829842086441167e-06
+}
