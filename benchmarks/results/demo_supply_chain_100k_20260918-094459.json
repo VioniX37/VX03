@@ -1,0 +1,128 @@
+{
+ "job_id": "7c0c6ee9cc20",
+ "instance_id": "supply_chain_100k",
+ "source": "live",
+ "state": "done",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789704876.9685426,
+ "solvers": {
+  "ours": {
+   "instance": "supply_chain_100k",
+   "solver": "ours",
+   "time_limit": 600.0,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12"
+   },
+   "build_time": 0.04941479999979492,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 8858985.674630359,
+   "solve_time": 5.570673700000043,
+   "algorithm": "pdlp",
+   "iterations": 1152,
+   "restarts": 6,
+   "device": "torch-cpu",
+   "rel_gap": 3.36873432905512e-05,
+   "rel_primal_residual": 8.223786078650412e-05,
+   "rel_dual_residual": 8.807792114831812e-06,
+   "state": "done"
+  },
+  "highs": {
+   "instance": "supply_chain_100k",
+   "solver": "highs",
+   "time_limit": 600.0,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12"
+   },
+   "build_time": 0.038400900000851834,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 8858352.01769039,
+   "solve_time": 8.190057699997851,
+   "iterations": 31051,
+   "nodes": 0,
+   "state": "done"
+  },
+  "gurobi": {
+   "instance": "supply_chain_100k",
+   "solver": "gurobi",
+   "time_limit": 600.0,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12"
+   },
+   "build_time": 0.042054599998664344,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 8858352.017690398,
+   "solve_time": 1.2394604000000982,
+   "nodes": 0,
+   "version": "13.0.3",
+   "state": "done"
+  }
+ },
+ "objective_match": {
+  "reference": "highs",
+  "values": {
+   "ours": 8858985.674630359,
+   "highs": 8858352.01769039,
+   "gurobi": 8858352.017690398
+  },
+  "rel_error": {
+   "ours": 7.15321471423844e-05,
+   "highs": 0.0,
+   "gurobi": 8.410797608906034e-16
+  }
+ },
+ "speedup": {
+  "vs_highs": 1.4702095547254523,
+  "vs_gurobi": 0.22249739739738994
+ },
+ "recorded": {
+  "ours": {
+   "time": 2.98,
+   "objective": 8858483.403039599,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 4.39,
+   "objective": 8858352.01769039,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 2.856,
+   "objective": 8858352.017690392,
+   "status": "optimal"
+  },
+  "source": "scale_20260917-105038.json + measured 20260918"
+ },
+ "gpu_panel": null,
+ "elapsed": 22.10846257209778
+}

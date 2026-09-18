@@ -1,0 +1,77 @@
+{
+ "job_id": "229ed3714760",
+ "instance_id": "qp_stcqp1",
+ "source": "live",
+ "state": "cancelled",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789703590.7641113,
+ "solvers": {
+  "ours": {
+   "instance": "qp_stcqp1",
+   "solver": "ours",
+   "time_limit": 300.0,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "build_time": 0.003759100000024773,
+   "status": "optimal",
+   "objective": 155143.55470911262,
+   "solve_time": 1.1177807999993092,
+   "algorithm": "qp_interior_point",
+   "iterations": 11,
+   "nodes": 0,
+   "mip_gap": null,
+   "best_bound": null,
+   "certificate": "FEASIBLE_CERTIFIED",
+   "max_primal_violation": 0.0,
+   "duality_gap": null,
+   "state": "done"
+  },
+  "highs": {
+   "status": "error",
+   "error": "no result line on stdout",
+   "state": "error"
+  },
+  "gurobi": {
+   "state": "cancelled",
+   "status": "cancelled"
+  }
+ },
+ "objective_match": {
+  "reference": "ours",
+  "values": {
+   "ours": 155143.55470911262
+  },
+  "rel_error": {
+   "ours": 0.0
+  }
+ },
+ "speedup": {
+  "vs_highs": null,
+  "vs_gurobi": null
+ },
+ "recorded": {
+  "ours": {
+   "time": 1.174,
+   "objective": 155143.55470911262,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 154.04,
+   "objective": 155143.55470395752,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 0.0286,
+   "objective": 155143.55474395794,
+   "status": "optimal"
+  },
+  "source": "qp-large_20260917-101301.json + measured 20260918"
+ },
+ "gpu_panel": null,
+ "elapsed": 5.010468482971191
+}

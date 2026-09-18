@@ -1,0 +1,142 @@
+{
+ "job_id": "b50cfde95bb7",
+ "instance_id": "supply_chain_1m",
+ "source": "live",
+ "state": "done",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789721040.8957639,
+ "solvers": {
+  "ours": {
+   "instance": "supply_chain_1m",
+   "solver": "ours",
+   "time_limit": 900.0,
+   "rows": 193442,
+   "cols": 999188,
+   "nnz": 2959896,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.6544633999992584,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 55042272.29771736,
+   "solve_time": 128.5852249999998,
+   "algorithm": "pdlp",
+   "iterations": 11776,
+   "restarts": 13,
+   "device": "cpu-fused (12 threads)",
+   "rel_gap": 8.35364630013639e-08,
+   "rel_primal_residual": 8.679406384559681e-08,
+   "rel_dual_residual": 4.8187719197979435e-09,
+   "state": "done"
+  },
+  "highs": {
+   "instance": "supply_chain_1m",
+   "solver": "highs",
+   "time_limit": 900.0,
+   "rows": 193442,
+   "cols": 999188,
+   "nnz": 2959896,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.6409082000000126,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 55042263.251770295,
+   "solve_time": 675.2713783999998,
+   "iterations": 318247,
+   "nodes": 0,
+   "state": "done"
+  },
+  "gurobi": {
+   "instance": "supply_chain_1m",
+   "solver": "gurobi",
+   "time_limit": 900.0,
+   "rows": 193442,
+   "cols": 999188,
+   "nnz": 2959896,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.6313476000004812,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 55042263.25177028,
+   "solve_time": 30.99941469999976,
+   "nodes": 0,
+   "version": "13.0.3",
+   "state": "done"
+  }
+ },
+ "objective_match": {
+  "reference": "gurobi",
+  "values": {
+   "ours": 55042272.29771736,
+   "highs": 55042263.251770295,
+   "gurobi": 55042263.25177028
+  },
+  "rel_error": {
+   "ours": 1.6434547832750645e-07,
+   "highs": 2.7072217444416954e-16,
+   "gurobi": 0.0
+  }
+ },
+ "speedup": {
+  "vs_highs": 5.251547200698997,
+  "vs_gurobi": 0.24108068948045785
+ },
+ "recorded": {
+  "ours": {
+   "time": 124.97,
+   "objective": 55042272.29771736,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 766.15,
+   "objective": 55042263.251770295,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 42.66,
+   "objective": 55042263.25177028,
+   "status": "optimal"
+  },
+  "source": "measured 20260918, 12 threads each, PDLP tol 1e-7"
+ },
+ "gpu_panel": {
+  "device": "Tesla T4",
+  "ours": 9.6335,
+  "highs": 305.7434,
+  "speedup": 31.7,
+  "highs_label": "HiGHS (1 thread, prior run)",
+  "gurobi": 42.66,
+  "rows": 193442,
+  "cols": 999188,
+  "source": "scale_kaggle_gpu_20260917-081355.json",
+  "note": "prior recorded run on a Kaggle Tesla T4 (4 vCPU) with the earlier PDLP at tolerance 1e-4 -- not this laptop, not live."
+ },
+ "elapsed": 847.4592041969299
+}

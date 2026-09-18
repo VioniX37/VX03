@@ -8,13 +8,14 @@ sequential, memory-hungry and hard to run on a GPU. PDHG needs only sparse matri
 products and vector arithmetic, which a GPU does thousands of in parallel. That makes it the
 method of choice for very large LPs (the approach behind PDLP / cuPDLP in the literature).
 
-Implemented here from the published method description:
+Implemented here from the published method descriptions:
 - Preconditioning: Ruiz equilibration (10 passes) + Pock-Chambolle (alpha = 1) diagonal scaling,
   then objective / bound norm rescaling.
-- PDHG with adaptive step size (step accepted when eta <= ||dz||_w^2 / (2 |dy^T K dx|)).
-- Primal weight omega balancing primal and dual progress, updated at every restart.
-- Adaptive restarts on the KKT error (sufficient / necessary / artificial criteria), restarting
-  from the better of the current and the step-weighted average iterate.
+- method="halpern" (default): restarted, reflected Halpern PDHG with a constant step
+  1/||K||_2, restarts on the fixed-point residual ||z - T(z)||, primal-weight rebalancing at each
+  restart. On CPU it runs on fused multi-threaded numba kernels (pdhg_kernels.py).
+- method="adaptive": the original PDLP loop -- adaptive step size, averaged iterates, restarts
+  on the KKT error -- kept so earlier recorded results stay reproducible.
 - Termination on relative primal residual, dual residual and duality gap measured in the
   ORIGINAL (unscaled) space. GPU <-> CPU synchronisation only happens every `eval_every` steps.
 
@@ -144,7 +145,259 @@ def make_ops(K: sp.csr_matrix, device: str = "auto"):
     return _NumpyOps(K)
 
 
+def _kernels():
+    """The fused numba kernels, or None when numba is not installed (NumPy fallback)."""
+    try:
+        from sovereign_opt.solvers.lp import pdhg_kernels
+        return pdhg_kernels
+    except ImportError:
+        return None
+
+
+# ------------------------------------------------------------------------------ Halpern engines
+# The Halpern loop keeps its whole state inside an engine: current z = (x, y), the PDHG image
+# z+ = T(z), the restart anchor z0, and the matching K x / K^T y for each. Engines differ only
+# in how they compute; the algorithm in _pdlp_halpern() is written once.
+
+class _FusedCPUEngine:
+    """Multi-threaded numba kernels, preallocated buffers, zero allocation per iteration."""
+
+    # below this many nonzeros one thread beats a thread team woken six times per iteration
+    PARALLEL_MIN_NNZ = 50_000
+
+    def __init__(self, Ks: sp.csr_matrix, KsT: sp.csr_matrix, cs, rl, ru, xl, xu, x_init, y_init, kern):
+        threads = _numba_threads() if Ks.nnz >= self.PARALLEL_MIN_NNZ else 1
+        self.k = kern.PARALLEL if threads > 1 else kern.SERIAL
+        self.name = f"cpu-fused ({threads} thread{'s' if threads > 1 else ''})"
+        self.Kp, self.Ki, self.Kd = Ks.indptr, Ks.indices, Ks.data
+        self.Tp, self.Ti, self.Td = KsT.indptr, KsT.indices, KsT.data
+        self.Kb, self.Tb = kern.nnz_blocks(self.Kp, threads), kern.nnz_blocks(self.Tp, threads)
+        m, n = Ks.shape
+        self.c, self.rl, self.ru, self.xl, self.xu = cs, rl, ru, xl, xu
+        f = lambda k: np.zeros(k)  # noqa: E731
+        self.x, self.xp, self.x0, self.KTy, self.KTyp, self.KTy0 = (f(n) for _ in range(6))
+        self.y, self.yp, self.y0, self.Kx, self.Kxp, self.Kx0 = (f(m) for _ in range(6))
+        self.x[:] = x_init
+        self.y[:] = y_init
+        self.mv(self.x, self.Kx)
+        self.rmv(self.y, self.KTy)
+        self.anchor()
+
+    def mv(self, x, out):
+        self.k.csr_matvec(self.Kp, self.Ki, self.Kd, x, out, self.Kb)
+
+    def rmv(self, y, out):
+        self.k.csr_matvec(self.Tp, self.Ti, self.Td, y, out, self.Tb)
+
+    def norm_estimate(self, iters: int) -> float:
+        v = np.random.default_rng(0).standard_normal(self.x.shape[0])
+        v /= np.linalg.norm(v)
+        Kv, w = np.zeros(self.y.shape[0]), np.zeros_like(v)
+        lam = 0.0
+        for _ in range(iters):
+            self.mv(v, Kv)
+            self.rmv(Kv, w)
+            lam = float(np.linalg.norm(w))
+            if lam == 0.0:
+                return 0.0
+            v = w / lam
+        return math.sqrt(lam)
+
+    def step(self, tau, sigma):
+        dx2 = self.k.primal_step(self.x, self.KTy, self.c, self.xl, self.xu, tau, self.xp)
+        self.mv(self.xp, self.Kxp)
+        dy2, inter = self.k.dual_step(self.y, self.Kx, self.Kxp, self.rl, self.ru, sigma, self.yp)
+        self.rmv(self.yp, self.KTyp)
+        return dx2, dy2, inter
+
+    def primal_only(self, tau):
+        return self.k.primal_step(self.x, self.KTy, self.c, self.xl, self.xu, tau, self.xp)
+
+    def fused_step(self, tau, sigma, a, b, g):
+        """
+        One whole iteration -- step + Halpern -- in two passes, when x+ is already in place.
+        Returns (||dy||^2, dy^T K dx) of this iteration and ||dx||^2 of the NEXT one.
+        """
+        dy2, inter = self.k.fused_rows(self.Kp, self.Ki, self.Kd, self.Kb, self.xp, self.y, self.Kx,
+                                       self.y0, self.Kx0, self.rl, self.ru, sigma, a, b, g, self.yp, self.Kxp)
+        dx2_next = self.k.fused_cols(self.Tp, self.Ti, self.Td, self.Tb, self.yp, self.x, self.xp, self.x0,
+                                     self.KTy, self.KTy0, self.KTyp, self.c, self.xl, self.xu, tau, a, b, g)
+        return dy2, inter, dx2_next
+
+    def halpern(self, a, b, g):
+        self.k.halpern(self.x, self.xp, self.x0, self.KTy, self.KTyp, self.KTy0, a, b, g)
+        self.k.halpern(self.y, self.yp, self.y0, self.Kx, self.Kxp, self.Kx0, a, b, g)
+
+    def anchor_distance(self):
+        """||x+ - x0||, ||y+ - y0||: how far z+ has moved from the last restart point."""
+        return math.sqrt(self.k.sq_dist(self.xp, self.x0)), math.sqrt(self.k.sq_dist(self.yp, self.y0))
+
+    def restart(self):
+        """z <- z0 <- z+ (restart at the latest PDHG image)."""
+        for a, b in ((self.x, self.xp), (self.y, self.yp), (self.Kx, self.Kxp), (self.KTy, self.KTyp)):
+            np.copyto(a, b)
+        self.anchor()
+
+    def anchor(self):
+        for a, b in ((self.x0, self.x), (self.y0, self.y), (self.Kx0, self.Kx), (self.KTy0, self.KTy)):
+            np.copyto(a, b)
+
+    def kkt_plus(self, t):
+        """KKT measures at z+ in the ORIGINAL space; `t` carries the unscaling data."""
+        pres, dobj_r = self.k.kkt_rows(self.Kxp, self.yp, t.Dr, t.b_scale, t.c_scale, t.row_lb, t.row_ub)
+        dres, pobj, dobj_c = self.k.kkt_cols(self.xp, self.KTyp, self.c, t.Dc, t.b_scale, t.c_scale,
+                                             t.col_lb, t.col_ub)
+        return _kkt_finish(math.sqrt(pres), math.sqrt(dres), pobj, dobj_r + dobj_c, t)
+
+    def result(self):
+        return self.xp.copy(), self.yp.copy()
+
+
+class _ArrayEngine:
+    """Same state machine over NumPy or torch arrays (GPU, torch-cpu, or no numba)."""
+
+    def __init__(self, ops, cs, rl, ru, xl, xu, x_init, y_init, t):
+        self.ops, self.name = ops, ops.name
+        V = ops.vec
+        self.c, self.rl, self.ru, self.xl, self.xu = V(cs), V(rl), V(ru), V(xl), V(xu)
+        self.x = V(x_init)
+        self.y = V(y_init)
+        self.Kx, self.KTy = ops.mv(self.x), ops.rmv(self.y)
+        self.xp, self.yp, self.Kxp, self.KTyp = self.x, self.y, self.Kx, self.KTy
+        self.anchor()
+        # unscaling data on the device, for the KKT check
+        self.Dr, self.Dc = V(t.Dr), V(t.Dc)
+        self.row_lb, self.row_ub, self.col_lb, self.col_ub = V(t.row_lb), V(t.row_ub), V(t.col_lb), V(t.col_ub)
+        self.lfin_r, self.ufin_r = V(np.isfinite(t.row_lb).astype(float)) > 0, V(np.isfinite(t.row_ub).astype(float)) > 0
+        self.lfin_x, self.ufin_x = V(np.isfinite(t.col_lb).astype(float)) > 0, V(np.isfinite(t.col_ub).astype(float)) > 0
+
+    @staticmethod
+    def _copy(v):
+        return v.clone() if hasattr(v, "clone") else v.copy()
+
+    def norm_estimate(self, iters: int) -> float:
+        ops = self.ops
+        v = ops.vec(np.random.default_rng(0).standard_normal(len(self.xl)))
+        v = v / ops.norm(v)
+        lam = 0.0
+        for _ in range(iters):
+            w = ops.rmv(ops.mv(v))
+            lam = ops.norm(w)
+            if lam == 0.0:
+                return 0.0
+            v = w / lam
+        return math.sqrt(lam)
+
+    def step(self, tau, sigma):
+        ops = self.ops
+        self.xp = ops.clamp(self.x - tau * (self.c - self.KTy), self.xl, self.xu)
+        self.Kxp = ops.mv(self.xp)
+        v = self.y - sigma * (2.0 * self.Kxp - self.Kx)
+        self.yp = v + sigma * ops.clamp(-v / sigma, self.rl, self.ru)
+        self.KTyp = ops.rmv(self.yp)
+        dx, dy = self.xp - self.x, self.yp - self.y
+        return ops.dot(dx, dx), ops.dot(dy, dy), ops.dot(dy, self.Kxp - self.Kx)
+
+    def halpern(self, a, b, g):
+        h = lambda u, up, u0: a * ((1.0 + g) * up - g * u) + b * u0  # noqa: E731
+        self.x, self.KTy = h(self.x, self.xp, self.x0), h(self.KTy, self.KTyp, self.KTy0)
+        self.y, self.Kx = h(self.y, self.yp, self.y0), h(self.Kx, self.Kxp, self.Kx0)
+
+    def anchor_distance(self):
+        return self.ops.norm(self.xp - self.x0), self.ops.norm(self.yp - self.y0)
+
+    def restart(self):
+        self.x, self.y, self.Kx, self.KTy = self.xp, self.yp, self.Kxp, self.KTyp
+        self.anchor()
+
+    def anchor(self):
+        c = self._copy
+        self.x0, self.y0, self.Kx0, self.KTy0 = c(self.x), c(self.y), c(self.Kx), c(self.KTy)
+
+    def kkt_plus(self, t):
+        ops = self.ops
+        Kx_o = self.Kxp / self.Dr * t.b_scale
+        pres = ops.norm(Kx_o - ops.clamp(Kx_o, self.row_lb, self.row_ub))
+        d_o = (self.c - self.KTyp) / self.Dc * t.c_scale
+        zn = ops.zeros_like(d_o)
+        dres = ops.norm(ops.where(self.lfin_x, zn, ops.clamp(d_o, 0.0, INF))
+                        + ops.where(self.ufin_x, zn, ops.clamp(d_o, -INF, 0.0)))
+        pobj = ops.dot(self.c / self.Dc * t.c_scale, self.xp * self.Dc * t.b_scale)
+        y_o = self.yp * self.Dr * t.c_scale
+        zm = ops.zeros_like(y_o)
+        dobj = (ops.dot(ops.clamp(y_o, 0.0, INF), ops.where(self.lfin_r, self.row_lb, zm))
+                + ops.dot(ops.clamp(y_o, -INF, 0.0), ops.where(self.ufin_r, self.row_ub, zm))
+                + ops.dot(ops.clamp(d_o, 0.0, INF), ops.where(self.lfin_x, self.col_lb, zn))
+                + ops.dot(ops.clamp(d_o, -INF, 0.0), ops.where(self.ufin_x, self.col_ub, zn)))
+        return _kkt_finish(pres, dres, pobj, dobj, t)
+
+    def result(self):
+        self.ops.sync()
+        return self.ops.to_numpy(self.xp).copy(), self.ops.to_numpy(self.yp).copy()
+
+
+def _kkt_finish(pres, dres, pobj, dobj, t):
+    rp = pres / (1.0 + t.rhs_norm)
+    rd = dres / (1.0 + t.c_norm)
+    rg = abs(pobj - dobj) / (1.0 + abs(pobj) + abs(dobj))
+    return rp, rd, rg, pobj, dobj
+
+
+def warmup() -> None:
+    """
+    Load the compiled numba kernels (serial and parallel) with a throwaway 2-variable LP.
+    The first call of each kernel in a fresh process reads it from numba's on-disk cache,
+    which costs about as much as importing a solver library; call this before timing a solve.
+    """
+    if _kernels() is None:
+        return
+    A = sp.csr_matrix(np.array([[1.0, 1.0], [1.0, -1.0]]))
+    args = (A, np.array([1.0, 2.0]), np.array([1.0, -1.0]), np.array([np.inf, 1.0]), np.zeros(2), np.full(2, 10.0))
+    old = _FusedCPUEngine.PARALLEL_MIN_NNZ
+    try:
+        for threshold in (0, old):          # parallel kernel set, then serial
+            _FusedCPUEngine.PARALLEL_MIN_NNZ = threshold
+            pdlp(*args, tol=1e-6, max_iterations=256, device="cpu")
+    finally:
+        _FusedCPUEngine.PARALLEL_MIN_NNZ = old
+
+
+def _numba_threads() -> int:
+    try:
+        import numba
+        return int(numba.get_num_threads())
+    except ImportError:
+        return 1
+
+
 # ------------------------------------------------------------------------------ scaling
+def _precondition_fused(K: sp.csr_matrix, kern, ruiz_passes: int = 10):
+    """_precondition() with in-place numba kernels: no matrix is rebuilt between passes."""
+    m, n = K.shape
+    Ks = sp.csr_matrix(K, dtype=np.float64, copy=True)
+    Ks.sort_indices()
+    ip, ix, d = Ks.indptr, Ks.indices, Ks.data
+    Dr, Dc = np.ones(m), np.ones(n)
+    rv, cv = np.empty(m), np.empty(n)
+    blocks = kern.nnz_blocks(ip, _numba_threads())
+
+    def inv_sqrt(v):
+        return np.where(v > 0, 1.0 / np.sqrt(np.where(v > 0, v, 1.0)), 1.0)
+
+    for _ in range(ruiz_passes):
+        kern.csr_row_absmax(ip, d, rv, blocks)
+        kern.csr_col_absmax(ix, d, cv)
+        r, cc = inv_sqrt(rv), inv_sqrt(cv)
+        kern.csr_scale(ip, ix, d, r, cc, blocks)
+        Dr *= r
+        Dc *= cc
+    kern.csr_row_abssum(ip, d, rv, blocks)
+    kern.csr_col_abssum(ix, d, cv)
+    r, cc = inv_sqrt(rv), inv_sqrt(cv)
+    kern.csr_scale(ip, ix, d, r, cc, blocks)
+    return Ks, Dr * r, Dc * cc
+
+
 def _precondition(K: sp.csr_matrix, ruiz_passes: int = 10):
     """Returns (Ks, D_row, D_col) with Ks = diag(D_row) K diag(D_col)."""
     m, n = K.shape
@@ -208,14 +461,28 @@ def pdlp(
     time_limit: float = 600.0,
     device: str = "auto",
     eval_every: int = 64,
+    method: str = "halpern",
+    reflection: float = 1.0,
+    x_init: Optional[np.ndarray] = None,
+    y_init: Optional[np.ndarray] = None,
 ) -> PDLPResult:
+    """
+    method "halpern" (default): restarted, reflected Halpern PDHG with a constant step size.
+    method "adaptive": the original PDLP loop (adaptive steps, averaged iterates), kept for
+    comparison with earlier recorded results.
+    x_init / y_init (halpern only): warm start from a previous point, in the original space --
+    e.g. to tighten the tolerance of a finished run without starting over.
+    """
     t_start = time.time()
     K = sp.csr_matrix(K, dtype=np.float64)
     m, n = K.shape
     c = np.asarray(c, dtype=np.float64)
+    row_lb, row_ub = np.asarray(row_lb, dtype=np.float64), np.asarray(row_ub, dtype=np.float64)
+    col_lb, col_ub = np.asarray(col_lb, dtype=np.float64), np.asarray(col_ub, dtype=np.float64)
+    kern = _kernels()
 
     # ---- preconditioning (CPU, once)
-    Ks, Dr, Dc = _precondition(K)
+    Ks, Dr, Dc = _precondition_fused(K, kern) if kern is not None else _precondition(K)
     cs = c * Dc
     rl, ru = row_lb * Dr, row_ub * Dr
     xl, xu = col_lb / Dc, col_ub / Dc
@@ -227,6 +494,19 @@ def pdlp(
     # quantities for termination in the ORIGINAL space
     rhs_norm = _finite_norm(row_lb, row_ub)
     c_norm = float(np.linalg.norm(c))
+
+    if method == "halpern":
+        bn, cn = _finite_norm(rl, ru), float(np.linalg.norm(cs))
+        t = _Unscale(Dr=Dr, Dc=Dc, b_scale=b_scale, c_scale=c_scale, row_lb=row_lb, row_ub=row_ub,
+                     col_lb=col_lb, col_ub=col_ub, rhs_norm=rhs_norm, c_norm=c_norm)
+        xs0 = np.clip(np.zeros(n) if x_init is None else np.asarray(x_init, dtype=np.float64) / (Dc * b_scale), xl, xu)
+        ys0 = np.zeros(m) if y_init is None else np.asarray(y_init, dtype=np.float64) / (Dr * c_scale)
+        return _pdlp_halpern(Ks, cs, rl, ru, xl, xu, t, omega=(cn / bn if (bn > 1e-10 and cn > 1e-10) else 1.0),
+                             tol=tol, max_iterations=max_iterations, time_limit=time_limit, device=device,
+                             eval_every=eval_every, reflection=reflection, kern=kern, t_start=t_start,
+                             x_init=xs0, y_init=ys0)
+    if method != "adaptive":
+        raise ValueError(f"unknown PDLP method '{method}' (halpern | adaptive)")
 
     ops = make_ops(Ks, device)
     V = ops.vec
@@ -372,6 +652,136 @@ def pdlp(
     return PDLPResult(status=status, x=x_o, y=y_o, primal_objective=pobj, dual_objective=dobj,
                       rel_primal_residual=rp, rel_dual_residual=rd, rel_gap=rg, iterations=k, restarts=restarts,
                       device=ops.name, runtime=time.time() - t_start, setup_time=setup, trace=trace)
+
+
+@dataclass
+class _Unscale:
+    """What the KKT check needs to measure residuals in the original, unscaled space."""
+    Dr: np.ndarray
+    Dc: np.ndarray
+    b_scale: float
+    c_scale: float
+    row_lb: np.ndarray
+    row_ub: np.ndarray
+    col_lb: np.ndarray
+    col_ub: np.ndarray
+    rhs_norm: float
+    c_norm: float
+
+
+def _make_engine(Ks, cs, rl, ru, xl, xu, t, device, kern, x_init, y_init):
+    if device == "auto":
+        try:
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        except ImportError:
+            device = "cpu"
+    if device == "cpu" and kern is not None:
+        return _FusedCPUEngine(Ks, Ks.T.tocsr(), cs, rl, ru, xl, xu, x_init, y_init, kern)
+    ops = make_ops(Ks, "cpu" if device == "numpy" else device)
+    return _ArrayEngine(ops, cs, rl, ru, xl, xu, x_init, y_init, t)
+
+
+# Restart thresholds on the fixed-point residual ||z - T(z)||, as in restarted Halpern PDHG.
+_SUFFICIENT, _NECESSARY, _ARTIFICIAL = 0.2, 0.8, 0.36
+_STEP_SAFETY = 0.998      # constant step eta = safety / ||K||_2
+# Primal weight omega balances primal and dual progress. At each restart a PID controller in log
+# space drives omega toward dy/dx (the dual over the primal distance moved since the last restart):
+#   e = log(omega) - log(dy/dx),   log(omega) -= KP e + KI sum(e) + KD (e - e_prev)
+# KI = KD = 0 is the classic PDLP smoothing omega <- (dy/dx)^KP omega^(1-KP).
+_WEIGHT_KP, _WEIGHT_KI, _WEIGHT_KD = 0.8, 0.0, 0.0
+
+
+def _pdlp_halpern(Ks, cs, rl, ru, xl, xu, t, omega, tol, max_iterations, time_limit, device,
+                  eval_every, reflection, kern, t_start, x_init, y_init) -> PDLPResult:
+    """
+    Restarted reflected Halpern PDHG.
+
+    PDHG is a fixed-point iteration z <- T(z). Halpern anchors every step to the last restart
+    point z0:   z_{k+1} = (k+1)/(k+2) [(1+g) T(z_k) - g z_k] + 1/(k+2) z0
+    which gives the optimal O(1/k) rate on the fixed-point residual ||z - T(z)|| (plain PDHG
+    only guarantees that for the average). Reflection g in (0, 1] takes a longer step along the
+    same direction; the reflected operator is still nonexpansive, so the guarantee holds.
+
+    Because the rate is on the *last* iterate, there is no averaged sequence to maintain and the
+    step size is a constant 1/||K||_2 -- no rejected steps, so every iteration is exactly two
+    mat-vecs. Restarts are decided on ||z - T(z)|| itself, which the fused kernels produce for
+    free, and each restart rebalances the primal weight omega.
+    """
+    eng = _make_engine(Ks, cs, rl, ru, xl, xu, t, device, kern, x_init, y_init)
+    norm_k = eng.norm_estimate(60)
+    eta = _STEP_SAFETY / max(norm_k * 1.01, 1e-12)   # power iteration approaches ||K|| from below
+    setup = time.time() - t_start
+
+    status = "iteration_limit"
+    rp = rd = rg = pobj = dobj = INF
+    trace: List[Dict[str, Any]] = []
+    k = inner = restarts = 0
+    r_anchor = r_prev = INF
+    w_int, w_prev = 0.0, None
+    fused = hasattr(eng, "fused_step")
+    pending_dx2 = None   # x+ already computed (by the previous fused pass) for the current z
+    while k < max_iterations:
+        tau, sigma = eta / omega, eta * omega
+        if fused and (k + 1) % eval_every and k + 1 < max_iterations:
+            # no check this iteration, so no restart: the Halpern step is certain -> fuse it
+            dx2 = pending_dx2 if pending_dx2 is not None else eng.primal_only(tau)
+            dy2, inter, pending_dx2 = eng.fused_step(tau, sigma, (inner + 1.0) / (inner + 2.0),
+                                                     1.0 / (inner + 2.0), reflection)
+            k += 1
+            r = math.sqrt(max(omega * dx2 + dy2 / omega - 2.0 * eta * inter, 0.0))
+            if inner == 0:
+                r_anchor, r_prev = r, INF
+            inner += 1
+            continue
+        pending_dx2 = None
+        dx2, dy2, inter = eng.step(tau, sigma)
+        k += 1
+        # fixed-point residual ||z - T(z)|| in the PDHG norm (scaled by eta)
+        r = math.sqrt(max(omega * dx2 + dy2 / omega - 2.0 * eta * inter, 0.0))
+        if inner == 0:
+            r_anchor, r_prev = r, INF   # residual of the restart point itself
+
+        if k % eval_every == 0 or k >= max_iterations:
+            rp, rd, rg, pobj, dobj = eng.kkt_plus(t)
+            trace.append({"iteration": k, "objective": pobj, "dual_objective": dobj, "norm_rp": rp,
+                          "norm_rd": rd, "rel_gap": rg, "step": eta, "primal_weight": omega,
+                          "restarts": restarts, "fixed_point_residual": r})
+            if not all(math.isfinite(v) for v in (rp, rd, rg, r)):
+                status = "numerical_error"
+                break
+            if rp <= tol and rd <= tol and rg <= tol:
+                status = "optimal"
+                break
+            if time.time() - t_start > time_limit:
+                status = "time_limit"
+                break
+            if (r <= _SUFFICIENT * r_anchor
+                    or (r <= _NECESSARY * r_anchor and r > r_prev)
+                    or inner >= _ARTIFICIAL * k):
+                dxn, dyn = eng.anchor_distance()
+                if dxn > 1e-10 and dyn > 1e-10:
+                    e = math.log(omega) - math.log(dyn / dxn)
+                    w_int += e
+                    de = 0.0 if w_prev is None else e - w_prev
+                    w_prev = e
+                    omega = math.exp(math.log(omega) - (_WEIGHT_KP * e + _WEIGHT_KI * w_int + _WEIGHT_KD * de))
+                eng.restart()
+                restarts += 1
+                inner = 0
+                continue
+            r_prev = r
+
+        eng.halpern((inner + 1.0) / (inner + 2.0), 1.0 / (inner + 2.0), reflection)
+        inner += 1
+
+    xs, ys = eng.result()
+    x_o = xs * t.Dc * t.b_scale
+    y_o = ys * t.Dr * t.c_scale
+    return PDLPResult(status=status, x=x_o, y=y_o, primal_objective=pobj, dual_objective=dobj,
+                      rel_primal_residual=rp, rel_dual_residual=rd, rel_gap=rg, iterations=k,
+                      restarts=restarts, device=eng.name, runtime=time.time() - t_start,
+                      setup_time=setup, trace=trace)
 
 
 # ------------------------------------------------------------------------------ solver wrapper

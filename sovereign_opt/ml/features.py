@@ -60,13 +60,12 @@ class FeatureExtractor:
         max_c = meta.max_coefficient if meta.max_coefficient > 0 else 1.0
         coeff_range = float(np.log10(max(max_c / min_c, 1.0)))
 
-        # Variable bound distributions
-        bounded_below = sum(1 for v in model.variables.values() if not np.isneginf(v.lower_bound))
-        bounded_above = sum(1 for v in model.variables.values() if not np.isposinf(v.upper_bound))
-        boxed = sum(
-            1 for v in model.variables.values()
-            if not np.isneginf(v.lower_bound) and not np.isposinf(v.upper_bound)
-        )
+        # Variable bound distributions (plain comparisons: a NumPy ufunc per scalar is ~50x slower)
+        lo = [v.lower_bound != -np.inf for v in model.variables.values()]
+        hi = [v.upper_bound != np.inf for v in model.variables.values()]
+        bounded_below = sum(lo)
+        bounded_above = sum(hi)
+        boxed = sum(a and b for a, b in zip(lo, hi))
 
         # Constraint senses
         le_count = sum(1 for c in model.constraints.values() if c.sense == ConstraintSense.LE)

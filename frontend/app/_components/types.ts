@@ -244,6 +244,7 @@ export interface DemoGpuPanel {
   ours: number;
   highs: number;
   gurobi?: number | null;
+  highs_label?: string;
   speedup: number;
   rows: number;
   cols: number;
@@ -266,6 +267,7 @@ export interface DemoInstance {
   recorded: Record<string, DemoRecordedEntry | string | undefined>;
   gpu_panel: DemoGpuPanel | null;
   notes: Record<string, string>;
+  threads?: number;
   cached: boolean;
 }
 
@@ -286,6 +288,7 @@ export interface DemoSolverResult {
   device?: string | null;
   mip_gap?: number | null;
   version?: string | null;
+  threads?: number | null;
   note?: string | null;
   error?: string | null;
 }

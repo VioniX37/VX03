@@ -1,0 +1,86 @@
+{
+ "job_id": "c2d4464f79c7",
+ "instance_id": "qp_stcqp1",
+ "source": "live",
+ "state": "cancelled",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789715949.8010638,
+ "solvers": {
+  "ours": {
+   "instance": "qp_stcqp1",
+   "solver": "ours",
+   "time_limit": 300.0,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.0031748999972478487,
+   "status": "optimal",
+   "objective": 155143.55470911262,
+   "solve_time": 0.8131844999952591,
+   "algorithm": "qp_interior_point",
+   "iterations": 11,
+   "nodes": 0,
+   "mip_gap": null,
+   "best_bound": null,
+   "certificate": "FEASIBLE_CERTIFIED",
+   "max_primal_violation": 0.0,
+   "duality_gap": null,
+   "state": "done"
+  },
+  "highs": {
+   "status": "error",
+   "error": "no result line on stdout",
+   "state": "error"
+  },
+  "gurobi": {
+   "state": "cancelled",
+   "status": "cancelled"
+  }
+ },
+ "objective_match": {
+  "reference": "ours",
+  "values": {
+   "ours": 155143.55470911262
+  },
+  "rel_error": {
+   "ours": 0.0
+  }
+ },
+ "speedup": {
+  "vs_highs": null,
+  "vs_gurobi": null
+ },
+ "recorded": {
+  "ours": {
+   "time": 1.07,
+   "objective": 155143.55470911262,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 134.82,
+   "objective": 155143.55470395752,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 0.021,
+   "objective": 155143.55474395968,
+   "status": "optimal"
+  },
+  "source": "measured 20260918, 12 threads each"
+ },
+ "gpu_panel": null,
+ "elapsed": 24.851275205612183
+}

@@ -1,0 +1,133 @@
+{
+ "job_id": "6ca97d116aa3",
+ "instance_id": "milp_uc_720",
+ "source": "live",
+ "state": "done",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789715889.7381074,
+ "solvers": {
+  "ours": {
+   "instance": "milp_uc_720",
+   "solver": "ours",
+   "time_limit": 300.0,
+   "rows": 1228,
+   "cols": 720,
+   "nnz": 3300,
+   "int_vars": 480,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.005742299996200018,
+   "status": "optimal",
+   "objective": 868889.9109681123,
+   "solve_time": 0.6939190999983111,
+   "algorithm": "branch_and_bound",
+   "iterations": 1009,
+   "nodes": 1,
+   "mip_gap": 0.0,
+   "best_bound": 868889.9109681123,
+   "certificate": "OPTIMAL_CERTIFIED",
+   "max_primal_violation": 2.2737367544323206e-13,
+   "duality_gap": 0.0,
+   "state": "done"
+  },
+  "highs": {
+   "instance": "milp_uc_720",
+   "solver": "highs",
+   "time_limit": 300.0,
+   "rows": 1228,
+   "cols": 720,
+   "nnz": 3300,
+   "int_vars": 480,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.005774299999757204,
+   "status": "optimal",
+   "objective": 868889.9109681122,
+   "solve_time": 0.06434050000098068,
+   "iterations": 452,
+   "nodes": 1,
+   "state": "done"
+  },
+  "gurobi": {
+   "instance": "milp_uc_720",
+   "solver": "gurobi",
+   "time_limit": 300.0,
+   "rows": 1228,
+   "cols": 720,
+   "nnz": 3300,
+   "int_vars": 480,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.005387299999711104,
+   "status": "optimal",
+   "objective": 868889.9109681123,
+   "solve_time": 0.046002600000065286,
+   "nodes": 1,
+   "version": "13.0.3",
+   "mip_gap": 2.2776883999640804e-15,
+   "state": "done"
+  }
+ },
+ "objective_match": {
+  "reference": "gurobi",
+  "values": {
+   "ours": 868889.9109681123,
+   "highs": 868889.9109681122,
+   "gurobi": 868889.9109681123
+  },
+  "rel_error": {
+   "ours": 0.0,
+   "highs": 1.3398167058612238e-16,
+   "gurobi": 0.0
+  }
+ },
+ "speedup": {
+  "vs_highs": 0.09272046266075869,
+  "vs_gurobi": 0.06629389506669761
+ },
+ "recorded": {
+  "ours": {
+   "time": 1.02,
+   "objective": 868889.9109681123,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 0.078,
+   "objective": 868889.9109681122,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 0.062,
+   "objective": 868889.9109681123,
+   "status": "optimal"
+  },
+  "source": "measured 20260918, 12 threads each"
+ },
+ "gpu_panel": null,
+ "elapsed": 2.9321165084838867
+}

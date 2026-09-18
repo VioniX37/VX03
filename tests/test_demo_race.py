@@ -18,6 +18,8 @@ from benchmarks.demo_race import (
     GUROBI_FREE_VARS,
     RESULTS,
     SOLVER_LABELS,
+    THREAD_ENV_VARS,
+    engine_env,
     instance_payload,
     race_one,
     solver_applicable,
@@ -57,6 +59,19 @@ def test_recorded_objectives_agree_across_solvers(instance_id):
     tol = 1e-4 if inst.size.get("int_vars") else 1e-3
     for o in objs:
         assert abs(o - ref) / max(1.0, abs(ref)) <= tol, f"{instance_id}: recorded objectives disagree"
+
+
+def test_every_engine_gets_the_same_environment():
+    """Same thread budget for every engine and every BLAS/OpenMP pool; no solver is pinned."""
+    import benchmarks.demo_race as dr
+    env = engine_env(8)
+    assert env["DEMO_THREADS"] == "8"
+    assert all(env[v] == "8" for v in THREAD_ENV_VARS)
+    assert instance_payload(DEMO_INSTANCES["supply_chain_100k"])["threads"] == dr.DEMO_THREADS
+    assert not any("thread" in label for label in SOLVER_LABELS.values())
+    src = open(dr.__file__, encoding="utf-8").read()
+    assert 'setOptionValue("threads", DEMO_THREADS)' in src
+    assert "Params.Threads = DEMO_THREADS" in src
 
 
 def test_size_limited_license_skips_the_big_models_only():
@@ -120,7 +135,8 @@ def test_api_lists_instances_and_replays_recorded():
     assert job["state"] == "done" and job["source"] == "recorded"
     assert job["solvers"]["ours"]["solve_time"] > 0
     assert job["speedup"]["vs_highs"] > 1  # we are faster than HiGHS at a million variables
-    assert job["speedup"]["vs_gurobi"] > 1  # and faster than Gurobi
+    assert job["objective_match"]["reference"] == "gurobi"  # Gurobi is the accuracy reference
+    assert job["objective_match"]["rel_error"]["ours"] < 1e-6
 
     assert client.post("/api/demo/race", json={"instance_id": "nope"}).status_code == 404
     assert client.get("/api/demo/race/deadbeef").status_code == 404
