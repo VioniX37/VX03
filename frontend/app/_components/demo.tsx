@@ -226,7 +226,8 @@ function RacePanel({ inst, job }: { inst: DemoInstance; job: DemoJob | undefined
       right={job ? `source: ${job.source}${job.source_file ? ` · ${job.source_file}` : ""}` : "not run"}
     >
       <Comment>
-        one solver at a time, each with the whole machine. HiGHS and Gurobi are pinned to a single thread.
+        one solver at a time, each in a fresh process with the whole machine: every engine gets the same{" "}
+        {inst.threads ?? "?"} threads, the same input arrays and the same clock — only the engine differs.
         bars are on a linear scale — full width = {fmt.dur(scale)}, dashed tick = previously recorded time.
       </Comment>
       <div className="mt-2 divide-y divide-line-soft">
@@ -242,9 +243,10 @@ function ObjectiveMatch({ inst, job }: { inst: DemoInstance; job: DemoJob | unde
   const m = job?.objective_match;
   const keys = Object.keys(m?.values ?? {});
   const isMip = (inst.size.int_vars ?? 0) > 0;
-  // PDLP is a first-order method run to a 1e-4 relative KKT tolerance, so an LP it solves
-  // lands near there by design; simplex/interior-point and MILP answers are exact to rounding.
-  const tol = isMip ? 1e-4 : inst.problem_class === "LP" ? 5e-4 : 1e-6;
+  // PDLP is a first-order method run to a 1e-7 relative KKT tolerance, so an LP it solves
+  // lands within a few 1e-7 of Gurobi's optimum; simplex/interior-point and MILP answers are
+  // exact to rounding.
+  const tol = isMip ? 1e-4 : 1e-6;
   const worst = keys.length ? Math.max(...keys.map((k) => m?.rel_error?.[k] ?? 0)) : null;
 
   return (
@@ -280,8 +282,8 @@ function ObjectiveMatch({ inst, job }: { inst: DemoInstance; job: DemoJob | unde
             {worst !== null && worst <= 1e-12
               ? "identical to double precision — every solver found the same optimum."
               : `same optimum: the solvers agree to ${fmt.sci(worst, 1)} relative error` +
-                (inst.problem_class === "LP" && worst !== null && worst > 1e-6
-                  ? ", the first-order tolerance our PDLP solver is asked for."
+                (inst.problem_class === "LP" && worst !== null && worst > 1e-9
+                  ? " -- within the 1e-7 tolerance our PDLP solver is asked for."
                   : ".")}
           </Comment>
         </>
@@ -322,7 +324,7 @@ function GpuPanel({ inst }: { inst: DemoInstance }) {
   const rows: Array<[string, number, string]> = [
     ["sovereign PDLP on GPU", g.ours, "bg-green"],
     ...(g.gurobi ? ([["Gurobi (this laptop)", g.gurobi, "bg-cyan"]] as Array<[string, number, string]>) : []),
-    ["HiGHS (1 thread)", g.highs, "bg-faint"],
+    [g.highs_label ?? "HiGHS", g.highs, "bg-faint"],
   ];
   return (
     <Panel title={`the same model on a ${g.device}`} right={g.source}>

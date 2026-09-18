@@ -17,6 +17,7 @@ Reductions (repeated until no progress):
 - Duplicate continuous columns
 - Coefficient tightening on binary variables (MILP)
 """
+import math
 from dataclasses import dataclass
 from typing import Dict, List, Set, Tuple
 import numpy as np
@@ -178,25 +179,30 @@ class _PresolveState:
         self.cost: Dict[str, float] = dict(model.objective.linear_coefficients)
         self.offset = float(model.objective.offset)
         self.quad: Dict[Tuple[str, str], float] = dict(model.objective.quadratic_coefficients)
+        # variable -> the quadratic terms it appears in, so removing a variable touches only those
+        self.quad_of: Dict[str, Set[Tuple[str, str]]] = {}
+        for key in self.quad:
+            for v in key:
+                self.quad_of.setdefault(v, set()).add(key)
         self.stats = {k: 0 for k in ("fixed", "empty_rows", "empty_cols", "singleton_rows", "redundant_rows", "forcing_rows",
                                      "doubleton", "dominated", "parallel_rows", "duplicate_cols", "tightened", "coef_tightening")}
         for v in self.var_order:
             if self.is_int(v):
-                self.lb[v] = float(np.ceil(self.lb[v] - 1e-9)) if np.isfinite(self.lb[v]) else self.lb[v]
-                self.ub[v] = float(np.floor(self.ub[v] + 1e-9)) if np.isfinite(self.ub[v]) else self.ub[v]
+                self.lb[v] = float(np.ceil(self.lb[v] - 1e-9)) if math.isfinite(self.lb[v]) else self.lb[v]
+                self.ub[v] = float(np.floor(self.ub[v] + 1e-9)) if math.isfinite(self.ub[v]) else self.ub[v]
 
     # ------------------------------------------------------------ helpers
     def is_int(self, v: str) -> bool:
         return self.vtype[v] in (VariableType.INTEGER, VariableType.BINARY)
 
     def quad_vars(self) -> Set[str]:
-        return {v for key in self.quad for v in key}
+        return {v for v, keys in self.quad_of.items() if keys}
 
     def ctil(self, v: str) -> float:
         return self.sign * self.cost.get(v, 0.0)
 
     def rtol(self, value: float) -> float:
-        return self.tol * max(1.0, abs(value) if np.isfinite(value) else 1.0)
+        return self.tol * max(1.0, abs(value) if math.isfinite(value) else 1.0)
 
     def check_bounds(self, v: str):
         if self.lb[v] > self.ub[v] + self.rtol(self.lb[v]):
@@ -211,9 +217,12 @@ class _PresolveState:
         del self.col_rows[v]
         c = self.cost.pop(v, 0.0)
         self.offset += c * value
-        for key in [k for k in self.quad if v in k]:
+        for key in self.quad_of.pop(v, ()):
             q = self.quad.pop(key)
             a, b = key
+            for w in key:
+                if w != v:
+                    self.quad_of[w].discard(key)
             if a == b:
                 self.offset += 0.5 * q * value * value
             else:
@@ -236,11 +245,11 @@ class _PresolveState:
         inf_mn = inf_mx = 0
         for v, a in row["coeffs"].items():
             lo, hi = (self.lb[v], self.ub[v]) if a > 0 else (self.ub[v], self.lb[v])
-            if np.isfinite(lo):
+            if math.isfinite(lo):
                 mn += a * lo
             else:
                 inf_mn += 1
-            if np.isfinite(hi):
+            if math.isfinite(hi):
                 mx += a * hi
             else:
                 inf_mx += 1
@@ -252,7 +261,7 @@ class _PresolveState:
         for v in list(self.lb.keys()):
             self.check_bounds(v)
             lo, hi = self.lb[v], self.ub[v]
-            if np.isfinite(lo) and hi - lo <= self.rtol(lo):
+            if math.isfinite(lo) and hi - lo <= self.rtol(lo):
                 value = float(np.round(lo)) if self.is_int(v) else lo
                 self.remove_var(v, value, ReductionType.FIXED_VARIABLE)
                 self.stats["fixed"] += 1
@@ -283,8 +292,8 @@ class _PresolveState:
             else:
                 new_lb, new_ub = row["ub"] / a, row["lb"] / a
             if self.is_int(v):
-                new_lb = float(np.ceil(new_lb - 1e-9)) if np.isfinite(new_lb) else new_lb
-                new_ub = float(np.floor(new_ub + 1e-9)) if np.isfinite(new_ub) else new_ub
+                new_lb = float(np.ceil(new_lb - 1e-9)) if math.isfinite(new_lb) else new_lb
+                new_ub = float(np.floor(new_ub + 1e-9)) if math.isfinite(new_ub) else new_ub
             if new_lb > self.lb[v]:
                 self.lb[v] = new_lb
             if new_ub < self.ub[v]:
@@ -304,11 +313,11 @@ class _PresolveState:
             ct = self.ctil(v)
             lo, hi = self.lb[v], self.ub[v]
             if ct > self.tol:
-                if not np.isfinite(lo):
+                if not math.isfinite(lo):
                     raise PresolveUnboundedError(f"Variable '{v}' improves the objective without bound (no lower bound).")
                 value = lo
             elif ct < -self.tol:
-                if not np.isfinite(hi):
+                if not math.isfinite(hi):
                     raise PresolveUnboundedError(f"Variable '{v}' improves the objective without bound (no upper bound).")
                 value = hi
             else:
@@ -332,15 +341,15 @@ class _PresolveState:
                 raise PresolveInfeasibleError(f"Row '{r}': minimum activity {mn:.6g} exceeds upper bound {rub:.6g}.")
             if inf_mx == 0 and mx < rlb - self.rtol(rlb):
                 raise PresolveInfeasibleError(f"Row '{r}': maximum activity {mx:.6g} below lower bound {rlb:.6g}.")
-            lower_ok = (not np.isfinite(rlb)) or (inf_mn == 0 and mn >= rlb - self.rtol(rlb))
-            upper_ok = (not np.isfinite(rub)) or (inf_mx == 0 and mx <= rub + self.rtol(rub))
+            lower_ok = (not math.isfinite(rlb)) or (inf_mn == 0 and mn >= rlb - self.rtol(rlb))
+            upper_ok = (not math.isfinite(rub)) or (inf_mx == 0 and mx <= rub + self.rtol(rub))
             if lower_ok and upper_ok:
                 self.remove_row(r, ReductionType.REDUNDANT_ROW)
                 self.stats["redundant_rows"] += 1
                 progress = True
                 continue
             # forcing rows: the only feasible activity is an extreme one
-            if np.isfinite(rlb) and inf_mx == 0 and mx <= rlb + self.rtol(rlb):
+            if math.isfinite(rlb) and inf_mx == 0 and mx <= rlb + self.rtol(rlb):
                 for v, a in row["coeffs"].items():
                     val = self.ub[v] if a > 0 else self.lb[v]
                     self.lb[v] = self.ub[v] = val
@@ -348,7 +357,7 @@ class _PresolveState:
                 self.stats["forcing_rows"] += 1
                 progress = True
                 continue
-            if np.isfinite(rub) and inf_mn == 0 and mn >= rub - self.rtol(rub):
+            if math.isfinite(rub) and inf_mn == 0 and mn >= rub - self.rtol(rub):
                 for v, a in row["coeffs"].items():
                     val = self.lb[v] if a > 0 else self.ub[v]
                     self.lb[v] = self.ub[v] = val
@@ -362,7 +371,7 @@ class _PresolveState:
                     continue
                 lo_c = a * self.lb[v] if a > 0 else a * self.ub[v]
                 hi_c = a * self.ub[v] if a > 0 else a * self.lb[v]
-                if np.isfinite(rub) and inf_mn == 0 and np.isfinite(lo_c):
+                if math.isfinite(rub) and inf_mn == 0 and math.isfinite(lo_c):
                     bound = (rub - (mn - lo_c)) / a
                     if abs(bound) < 1e12:
                         if a > 0 and np.floor(bound + 1e-9) < self.ub[v] - 0.5:
@@ -373,7 +382,7 @@ class _PresolveState:
                             self.lb[v] = float(np.ceil(bound - 1e-9))
                             self.stats["tightened"] += 1
                             progress = True
-                if np.isfinite(rlb) and inf_mx == 0 and np.isfinite(hi_c):
+                if math.isfinite(rlb) and inf_mx == 0 and math.isfinite(hi_c):
                     bound = (rlb - (mx - hi_c)) / a
                     if abs(bound) < 1e12:
                         if a > 0 and np.ceil(bound - 1e-9) > self.lb[v] + 0.5:
@@ -401,14 +410,14 @@ class _PresolveState:
                 row = self.rows[r]
                 a = row["coeffs"][v]
                 if a > 0:
-                    down_ok &= not np.isfinite(row["lb"])
-                    up_ok &= not np.isfinite(row["ub"])
+                    down_ok &= not math.isfinite(row["lb"])
+                    up_ok &= not math.isfinite(row["ub"])
                 else:
-                    down_ok &= not np.isfinite(row["ub"])
-                    up_ok &= not np.isfinite(row["lb"])
-            if ct >= 0 and down_ok and np.isfinite(self.lb[v]):
+                    down_ok &= not math.isfinite(row["ub"])
+                    up_ok &= not math.isfinite(row["lb"])
+            if ct >= 0 and down_ok and math.isfinite(self.lb[v]):
                 self.remove_var(v, self.lb[v], ReductionType.DOMINATED_COLUMN)
-            elif ct <= 0 and up_ok and np.isfinite(self.ub[v]):
+            elif ct <= 0 and up_ok and math.isfinite(self.ub[v]):
                 self.remove_var(v, self.ub[v], ReductionType.DOMINATED_COLUMN)
             else:
                 continue
@@ -423,7 +432,7 @@ class _PresolveState:
             if r not in self.rows:
                 continue
             row = self.rows[r]
-            if len(row["coeffs"]) != 2 or not np.isfinite(row["lb"]) or abs(row["ub"] - row["lb"]) > self.rtol(row["lb"]):
+            if len(row["coeffs"]) != 2 or not math.isfinite(row["lb"]) or abs(row["ub"] - row["lb"]) > self.rtol(row["lb"]):
                 continue
             (v1, a1), (v2, a2) = row["coeffs"].items()
             rhs = row["lb"]
@@ -448,8 +457,8 @@ class _PresolveState:
             else:
                 jl, ju = (uk - intercept) / slope, (lk - intercept) / slope
             if self.is_int(j):
-                jl = float(np.ceil(jl - 1e-9)) if np.isfinite(jl) else jl
-                ju = float(np.floor(ju + 1e-9)) if np.isfinite(ju) else ju
+                jl = float(np.ceil(jl - 1e-9)) if math.isfinite(jl) else jl
+                ju = float(np.floor(ju + 1e-9)) if math.isfinite(ju) else ju
             self.lb[j] = max(self.lb[j], jl)
             self.ub[j] = min(self.ub[j], ju)
             self.check_bounds(j)
@@ -565,7 +574,7 @@ class _PresolveState:
     def coefficient_tightening(self):
         """For rows with one finite side: shrink binary coefficients that exceed the row's slack."""
         for r, row in self.rows.items():
-            has_lb, has_ub = np.isfinite(row["lb"]), np.isfinite(row["ub"])
+            has_lb, has_ub = math.isfinite(row["lb"]), math.isfinite(row["ub"])
             if has_lb == has_ub:
                 continue
             flip = -1.0 if has_lb else 1.0  # work on  sum (flip * a) x <= flip * bound
@@ -581,7 +590,7 @@ class _PresolveState:
                 for w, aw in row["coeffs"].items():
                     aw = flip * aw
                     hi = self.ub[w] if aw > 0 else self.lb[w]
-                    if not np.isfinite(hi):
+                    if not math.isfinite(hi):
                         finite = False
                         break
                     mx += aw * hi
@@ -612,11 +621,11 @@ class _PresolveState:
             row = self.rows[c]
             lo, hi = row["lb"], row["ub"]
             coeffs = {v: a for v, a in row["coeffs"].items() if v in self.lb}
-            if np.isfinite(lo) and np.isfinite(hi) and abs(hi - lo) <= self.rtol(lo):
+            if math.isfinite(lo) and math.isfinite(hi) and abs(hi - lo) <= self.rtol(lo):
                 p.add_constraint(c, coeffs, ConstraintSense.EQ, rhs=lo)
-            elif np.isfinite(hi) and not np.isfinite(lo):
+            elif math.isfinite(hi) and not math.isfinite(lo):
                 p.add_constraint(c, coeffs, ConstraintSense.LE, rhs=hi)
-            elif np.isfinite(lo) and not np.isfinite(hi):
+            elif math.isfinite(lo) and not math.isfinite(hi):
                 p.add_constraint(c, coeffs, ConstraintSense.GE, rhs=lo)
             else:
                 p.add_constraint(c, coeffs, ConstraintSense.RANGE, lower_bound=lo, upper_bound=hi)

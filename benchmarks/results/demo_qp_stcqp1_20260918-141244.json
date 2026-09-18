@@ -1,0 +1,127 @@
+{
+ "job_id": "248817d64233",
+ "instance_id": "qp_stcqp1",
+ "source": "live",
+ "state": "done",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789720660.8348613,
+ "solvers": {
+  "ours": {
+   "instance": "qp_stcqp1",
+   "solver": "ours",
+   "time_limit": 300.0,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.004564899999422778,
+   "status": "optimal",
+   "objective": 155143.55470911262,
+   "solve_time": 0.31578820000049745,
+   "algorithm": "qp_interior_point",
+   "iterations": 11,
+   "nodes": 0,
+   "mip_gap": null,
+   "best_bound": null,
+   "certificate": "FEASIBLE_CERTIFIED",
+   "max_primal_violation": 0.0,
+   "duality_gap": null,
+   "state": "done"
+  },
+  "highs": {
+   "instance": "qp_stcqp1",
+   "solver": "highs",
+   "time_limit": 300.0,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.0027881000005436363,
+   "status": "time limit reached",
+   "objective": 155162.71673567238,
+   "solve_time": 300.06472790000043,
+   "iterations": 0,
+   "nodes": 0,
+   "state": "error"
+  },
+  "gurobi": {
+   "instance": "qp_stcqp1",
+   "solver": "gurobi",
+   "time_limit": 300.0,
+   "rows": 2052,
+   "cols": 4097,
+   "nnz": 13338,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.003997400000116613,
+   "status": "optimal",
+   "objective": 155143.55474395968,
+   "solve_time": 0.01831709999987652,
+   "nodes": 0,
+   "version": "13.0.3",
+   "state": "done"
+  }
+ },
+ "objective_match": {
+  "reference": "gurobi",
+  "values": {
+   "ours": 155143.55470911262,
+   "gurobi": 155143.55474395968
+  },
+  "rel_error": {
+   "ours": 2.2461174105010916e-10,
+   "gurobi": 0.0
+  }
+ },
+ "speedup": {
+  "vs_highs": null,
+  "vs_gurobi": 0.05800438395053287
+ },
+ "recorded": {
+  "ours": {
+   "time": 0.32,
+   "objective": 155143.55470911262,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 134.82,
+   "objective": 155143.55470395752,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 0.021,
+   "objective": 155143.55474395968,
+   "status": "optimal"
+  },
+  "source": "measured 20260918, 12 threads each"
+ },
+ "gpu_panel": null,
+ "elapsed": 304.1067862510681
+}

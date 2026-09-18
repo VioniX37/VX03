@@ -17,6 +17,14 @@ tests/test_benchmarks.py enforces that separation.
 
 Build time and solve time are reported separately: only solve_time races. Generating the 1M
 variable constraint matrix takes tens of seconds and must not be charged to either solver.
+
+Same environment for every engine -- the only variable is the engine itself:
+  * one fresh process per solver, run one at a time, so no engine competes with another;
+  * the same thread budget (DEMO_THREADS, default: every logical core) handed to each engine's
+    own parallelism knob -- our PDLP's numba pool, HiGHS `threads`, Gurobi `Threads` --
+    and to every BLAS / OpenMP pool through the environment variables below;
+  * the same input: every engine receives the arrays from _standard_arrays(), not a file;
+  * the same clock: solve_time brackets only the engine's solve call, after the model is loaded.
 """
 from __future__ import annotations
 
@@ -28,6 +36,28 @@ import time
 import traceback
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
+
+DEMO_THREADS = max(1, int(os.environ.get("DEMO_THREADS") or os.cpu_count() or 1))
+THREAD_ENV_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                   "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS", "NUMBA_NUM_THREADS")
+# Our LP answer must match Gurobi's, not just "look optimal": PDLP stops when the relative primal
+# residual, dual residual and duality gap are all below this, which puts the objective within
+# about this relative distance of the true optimum.
+PDLP_TOL = 1e-7
+# "pdlp_polish" instances stop PDLP much earlier and let the sparse vertex polish
+# (sovereign_opt/solvers/lp/polish.py) finish: the answer is then an exact, certified vertex --
+# the same point Gurobi returns, to machine precision -- in far fewer iterations. The second
+# tolerance is the warm-started fallback if the first polish cannot certify.
+POLISH_PDLP_TOLS = (1e-5, 1e-7)
+
+
+def engine_env(threads: int = DEMO_THREADS) -> Dict[str, str]:
+    """Environment every solver subprocess gets, identically. Must be set before numpy loads."""
+    return {"DEMO_THREADS": str(threads), **{v: str(threads) for v in THREAD_ENV_VARS}}
+
+
+if __name__ == "__main__":  # run directly: pin the pools before numpy/scipy/torch start them
+    os.environ.update(engine_env())
 
 import numpy as np
 import scipy.sparse as sp
@@ -93,7 +123,7 @@ class DemoInstance:
     problem_class: str                 # LP | QP | MILP
     kind: str                          # arrays | qps | model
     build: Dict[str, Any]
-    ours_algorithm: str                # pdlp_cpu | auto
+    ours_algorithm: str                # pdlp_polish | pdlp_cpu | auto
     size: Dict[str, int]               # expected rows / cols / nnz, for the card before a run
     solvers: Tuple[str, ...]
     default_time_limit: float
@@ -121,16 +151,20 @@ DEMO_INSTANCES: Dict[str, DemoInstance] = {
                "customers through their five nearest depots. Minimise total transport cost subject "
                "to plant capacity, warehouse balance and throughput, and customer demand."),
         problem_class="LP", kind="arrays", build={"target": 100_000},
-        ours_algorithm="pdlp_cpu",
+        ours_algorithm="pdlp_polish",
         size={"rows": 19_586, "cols": 99_728, "nnz": 295_596},
         solvers=("ours", "highs", "gurobi"),
         default_time_limit=600.0,
         recorded={
-            "ours": {"time": 2.98, "objective": 8858483.403039599, "status": "optimal"},
-            "highs": {"time": 4.39, "objective": 8858352.01769039, "status": "optimal"},
-            "gurobi": {"time": 2.856, "objective": 8858352.017690392, "status": "optimal"},
-            "source": "scale_20260917-105038.json + measured 20260918",
+            "ours": {"time": 1.85, "objective": 8858352.017690349, "status": "optimal"},
+            "highs": {"time": 4.22, "objective": 8858352.01769039, "status": "optimal"},
+            "gurobi": {"time": 1.00, "objective": 8858352.017690398, "status": "optimal"},
+            "source": "measured 20260918, 12 threads each, PDLP 1e-5 + vertex polish",
         },
+        notes={"honesty": ("PDLP gets close in about a second; a sparse active-set polish then "
+                           "lands on the exact optimal vertex -- the same objective as Gurobi to "
+                           "15 digits, with an independent KKT certificate. About 2x faster than "
+                           "HiGHS; Gurobi's parallel barrier is still faster at this size.")},
     ),
     "supply_chain_1m": DemoInstance(
         id="supply_chain_1m", letter="B",
@@ -144,20 +178,23 @@ DEMO_INSTANCES: Dict[str, DemoInstance] = {
         solvers=("ours", "highs", "gurobi"),
         default_time_limit=900.0, long_running=True,
         recorded={
-            "ours": {"time": 166.91, "objective": 55033635.044940114, "status": "optimal"},
-            "highs": {"time": 417.26, "objective": 55042263.251770295, "status": "optimal"},
-            "gurobi": {"time": 299.25, "objective": 55042263.25177029, "status": "optimal"},
-            "source": "scale_20260917-105038.json + measured 20260918",
+            "ours": {"time": 124.97, "objective": 55042272.29771736, "status": "optimal"},
+            "highs": {"time": 766.15, "objective": 55042263.251770295, "status": "optimal"},
+            "gurobi": {"time": 42.66, "objective": 55042263.25177028, "status": "optimal"},
+            "source": "measured 20260918, 12 threads each, PDLP tol 1e-7",
         },
-        notes={"honesty": ("This is the headline: at a million variables we are faster than "
-                           "both references on the same laptop -- 1.8x faster than Gurobi and "
-                           "2.5x faster than HiGHS, to the same optimum.")},
+        notes={"honesty": ("At a million variables we are 6x faster than HiGHS, to the same "
+                           "optimum within 2e-7. Gurobi's 12-thread barrier is still about 3x "
+                           "faster on this laptop's CPU; the GPU run below is where the "
+                           "first-order method pulls ahead.")},
         gpu_panel={
             "device": "Tesla T4", "ours": 9.6335, "highs": 305.7434, "speedup": 31.7,
-            "gurobi": 299.25,
+            "highs_label": "HiGHS (1 thread, prior run)",
+            "gurobi": 42.66,
             "rows": 193_442, "cols": 999_188,
             "source": "scale_kaggle_gpu_20260917-081355.json",
-            "note": "prior recorded run on a Kaggle Tesla T4 (4 vCPU) -- not this laptop, not live.",
+            "note": ("prior recorded run on a Kaggle Tesla T4 (4 vCPU) with the earlier PDLP at "
+                     "tolerance 1e-4 -- not this laptop, not live."),
         },
     ),
     "qp_stcqp1": DemoInstance(
@@ -173,13 +210,13 @@ DEMO_INSTANCES: Dict[str, DemoInstance] = {
         solvers=("ours", "highs", "gurobi"),
         default_time_limit=300.0,
         recorded={
-            "ours": {"time": 1.174, "objective": 155143.55470911262, "status": "optimal"},
-            "highs": {"time": 154.040, "objective": 155143.55470395752, "status": "optimal"},
-            "gurobi": {"time": 0.0286, "objective": 155143.55474395794, "status": "optimal"},
-            "source": "qp-large_20260917-101301.json + measured 20260918",
+            "ours": {"time": 0.32, "objective": 155143.55470911262, "status": "optimal"},
+            "highs": {"time": 134.82, "objective": 155143.55470395752, "status": "optimal"},
+            "gurobi": {"time": 0.021, "objective": 155143.55474395968, "status": "optimal"},
+            "source": "measured 20260918, 12 threads each",
         },
-        notes={"honesty": ("Against the open-source reference we are 131x faster. Gurobi is "
-                           "faster still on this one (29 ms) -- commercial QP remains ahead, "
+        notes={"honesty": ("Against the open-source reference we are over 100x faster. Gurobi is "
+                           "faster still on this one (about 20 ms) -- commercial QP remains ahead, "
                            "and that gap is exactly what the roadmap targets.")},
     ),
     "milp_uc_720": DemoInstance(
@@ -195,12 +232,12 @@ DEMO_INSTANCES: Dict[str, DemoInstance] = {
         solvers=("ours", "highs", "gurobi"),
         default_time_limit=300.0,
         recorded={
-            "ours": {"time": 1.03, "objective": 868889.9109681123, "status": "optimal"},
-            "highs": {"time": 0.11, "objective": 868889.9109681122, "status": "optimal"},
-            "gurobi": {"time": 0.064, "objective": 868889.9109681123, "status": "optimal"},
-            "source": "milpscale_20260917-143744.json + measured 20260918",
+            "ours": {"time": 0.51, "objective": 868889.9109681123, "status": "optimal"},
+            "highs": {"time": 0.078, "objective": 868889.9109681122, "status": "optimal"},
+            "gurobi": {"time": 0.062, "objective": 868889.9109681123, "status": "optimal"},
+            "source": "measured 20260918, 12 threads each",
         },
-        notes={"honesty": ("HiGHS wins this one. The objectives agree to the last bit and our "
+        notes={"honesty": ("HiGHS and Gurobi win this one. The objectives agree to the last bit and our "
                            "answer carries an independent optimality certificate -- the tree "
                            "search is simply not yet tuned.")},
     ),
@@ -227,7 +264,7 @@ DEMO_ORDER = [i for i in DEMO_INSTANCES if not DEMO_INSTANCES[i].hidden]
 
 SOLVER_LABELS = {
     "ours": "sovereign engine",
-    "highs": "HiGHS (1 thread)",
+    "highs": "HiGHS",
     "gurobi": "Gurobi",
 }
 
@@ -264,7 +301,7 @@ def instance_payload(inst: DemoInstance, gurobi: Optional[Dict[str, Any]] = None
         "story": inst.story, "problem_class": inst.problem_class, "size": dict(inst.size),
         "solvers": solvers, "long_running": inst.long_running, "hidden": inst.hidden,
         "default_time_limit": inst.default_time_limit, "recorded": inst.recorded,
-        "gpu_panel": inst.gpu_panel, "notes": dict(inst.notes),
+        "gpu_panel": inst.gpu_panel, "notes": dict(inst.notes), "threads": DEMO_THREADS,
     }
 
 
@@ -321,12 +358,32 @@ def _standard_arrays(form: str, payload):
 
 # ----------------------------------------------------------------------------- runners
 def run_ours(inst: DemoInstance, form: str, payload, time_limit: float) -> Dict[str, Any]:
+    if inst.ours_algorithm in ("pdlp_polish", "pdlp_cpu"):
+        # load the compiled kernels before the clock starts -- the counterpart of importing
+        # highspy / gurobipy, which is not timed for them either
+        from sovereign_opt.solvers.lp.pdlp import warmup
+        warmup()
+    if inst.ours_algorithm == "pdlp_polish":
+        from sovereign_opt.solvers.lp.polish import pdlp_exact
+        lp = payload
+        t0 = time.perf_counter()
+        r = pdlp_exact(lp.A, lp.c, lp.row_lb, lp.row_ub, lp.col_lb, lp.col_ub,
+                       tols=POLISH_PDLP_TOLS, time_limit=time_limit, device="cpu")
+        total = time.perf_counter() - t0
+        return {"status": r.status, "objective": r.objective, "solve_time": total,
+                "algorithm": "pdlp + vertex polish" if r.vertex else "pdlp", "vertex": r.vertex,
+                "iterations": r.pdlp_iterations, "restarts": r.restarts, "device": r.device,
+                "pdlp_seconds": r.pdlp_seconds, "polish_seconds": r.polish_seconds, "stages": r.stages,
+                "rel_gap": r.rel_gap, "rel_primal_residual": r.rel_primal_residual,
+                "rel_dual_residual": r.rel_dual_residual}
+
     if inst.ours_algorithm == "pdlp_cpu":
         from sovereign_opt.solvers.lp.pdlp import pdlp
         lp = payload
+        # fused numba kernels on DEMO_THREADS threads (NUMBA_NUM_THREADS, set in engine_env)
         t0 = time.perf_counter()
         r = pdlp(lp.A, lp.c, lp.row_lb, lp.row_ub, lp.col_lb, lp.col_ub,
-                 tol=1e-4, time_limit=time_limit, device="cpu")
+                 tol=PDLP_TOL, time_limit=time_limit, device="cpu")
         total = time.perf_counter() - t0
         return {"status": r.status, "objective": r.primal_objective, "solve_time": total,
                 "algorithm": "pdlp", "iterations": r.iterations, "restarts": r.restarts,
@@ -348,34 +405,50 @@ def run_ours(inst: DemoInstance, form: str, payload, time_limit: float) -> Dict[
 
 
 def run_highs(inst: DemoInstance, form: str, payload, time_limit: float) -> Dict[str, Any]:
-    if form == "arrays":
-        from benchmarks.scale import _highs_arrays  # same code path as the recorded scale numbers
-        r = _highs_arrays(payload, time_limit)
-        return {"status": r["status"], "objective": r["objective"], "solve_time": r["time"]}
-
     import highspy
+    A, c, row_lb, row_ub, col_lb, col_ub, vtypes, Q, offset, sign = _standard_arrays(form, payload)
+    A = sp.csc_matrix(A)
+    m_rows, n_cols = A.shape
+    inf = highspy.kHighsInf
+
     h = highspy.Highs()
     h.setOptionValue("output_flag", False)
-    h.setOptionValue("threads", 1)
+    h.setOptionValue("threads", DEMO_THREADS)   # HiGHS sizes its pool once per process
+    h.setOptionValue("parallel", "on")
     h.setOptionValue("time_limit", float(time_limit))
-    if form == "path":
-        h.readModel(payload)                       # same path as benchmarks/compare.py
-    else:
-        import tempfile
-        from sovereign_opt.parsers.mps_writer import write_mps
-        fd, tmp = tempfile.mkstemp(suffix=".mps")
-        with os.fdopen(fd, "w") as f:
-            f.write(write_mps(payload))
-        try:
-            h.readModel(tmp)
-        finally:
-            os.unlink(tmp)
+
+    L = highspy.HighsLp()
+    L.num_col_, L.num_row_ = int(n_cols), int(m_rows)
+    L.col_cost_ = np.asarray(c, dtype=np.float64)
+    L.col_lower_ = np.where(np.isneginf(col_lb), -inf, col_lb).astype(np.float64)
+    L.col_upper_ = np.where(np.isposinf(col_ub), inf, col_ub).astype(np.float64)
+    L.row_lower_ = np.where(np.isneginf(row_lb), -inf, row_lb).astype(np.float64)
+    L.row_upper_ = np.where(np.isposinf(row_ub), inf, row_ub).astype(np.float64)
+    L.a_matrix_.format_ = highspy.MatrixFormat.kColwise
+    L.a_matrix_.start_, L.a_matrix_.index_, L.a_matrix_.value_ = A.indptr, A.indices, A.data
+    L.a_matrix_.num_col_, L.a_matrix_.num_row_ = int(n_cols), int(m_rows)
+    is_int = vtypes != "C"
+    if is_int.any():
+        binary = vtypes == "B"
+        L.col_lower_ = np.where(binary, np.maximum(L.col_lower_, 0.0), L.col_lower_)
+        L.col_upper_ = np.where(binary, np.minimum(L.col_upper_, 1.0), L.col_upper_)
+        L.integrality_ = [highspy.HighsVarType.kInteger if i else highspy.HighsVarType.kContinuous
+                          for i in is_int]
+    model = highspy.HighsModel()
+    model.lp_ = L
+    if Q is not None:
+        H = sp.tril(sp.csc_matrix(Q)).tocsc()   # HiGHS: lower triangle, objective c'x + 1/2 x'Qx
+        model.hessian_.dim_ = int(n_cols)
+        model.hessian_.format_ = highspy.HessianFormat.kTriangular
+        model.hessian_.start_, model.hessian_.index_, model.hessian_.value_ = H.indptr, H.indices, H.data
+    h.passModel(model)
+
     t0 = time.perf_counter()
     h.run()
     total = time.perf_counter() - t0
     info = h.getInfo()
     status = h.modelStatusToString(h.getModelStatus()).lower()
-    obj = info.objective_function_value if info.primal_solution_status >= 1 else None
+    obj = sign * info.objective_function_value + offset if info.primal_solution_status >= 1 else None
     return {"status": status, "objective": obj, "solve_time": total,
             "iterations": int(max(info.simplex_iteration_count, 0) + max(info.ipm_iteration_count, 0)),
             "nodes": int(max(info.mip_node_count, 0))}
@@ -403,7 +476,7 @@ def run_gurobi(inst: DemoInstance, form: str, payload, time_limit: float) -> Dic
     try:
         env = gp.Env(params={"OutputFlag": 0})
         m = gp.Model("demo_race", env=env)
-        m.Params.Threads = 1
+        m.Params.Threads = DEMO_THREADS
         m.Params.TimeLimit = float(time_limit)
         lb = np.where(np.isneginf(col_lb), -gp.GRB.INFINITY, col_lb)
         ub = np.where(np.isposinf(col_ub), gp.GRB.INFINITY, col_ub)
@@ -447,7 +520,9 @@ RUNNERS = {"ours": run_ours, "highs": run_highs, "gurobi": run_gurobi}
 def race_one(instance_id: str, solver: str, time_limit: Optional[float] = None) -> Dict[str, Any]:
     inst = DEMO_INSTANCES[instance_id]
     tl = float(time_limit) if time_limit else inst.default_time_limit
-    rec: Dict[str, Any] = {"instance": instance_id, "solver": solver, "time_limit": tl, **inst.size}
+    rec: Dict[str, Any] = {"instance": instance_id, "solver": solver, "time_limit": tl, **inst.size,
+                           "threads": DEMO_THREADS,
+                           "thread_env": {v: os.environ.get(v) for v in THREAD_ENV_VARS}}
 
     ok, reason = solver_applicable(inst, solver, gurobi_probe() if solver == "gurobi" else None)
     if not ok:
@@ -512,11 +587,23 @@ def main(argv=None) -> int:
     if not a.solver and not a.all:
         ap.error("--solver or --all is required")
 
-    for s in (list(DEMO_INSTANCES[a.instance].solvers) if a.all else [a.solver]):
-        rec = race_one(a.instance, s, a.time_limit)
-        _emit(rec)
-        if a.save:
-            print(f"saved {_save(rec)}", file=sys.stderr)
+    if a.all:
+        # one fresh process per solver, exactly as the server runs them: an engine's leftover
+        # thread pool must never share a process with the next engine
+        import subprocess
+        for s in DEMO_INSTANCES[a.instance].solvers:
+            cmd = [sys.executable, "-m", "benchmarks.demo_race", "--instance", a.instance, "--solver", s]
+            if a.time_limit:
+                cmd += ["--time-limit", str(a.time_limit)]
+            if a.save:
+                cmd.append("--save")
+            subprocess.run(cmd, cwd=REPO_ROOT, env={**os.environ, **engine_env()})
+        return 0
+
+    rec = race_one(a.instance, a.solver, a.time_limit)
+    _emit(rec)
+    if a.save:
+        print(f"saved {_save(rec)}", file=sys.stderr)
     return 0
 
 

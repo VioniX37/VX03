@@ -1,0 +1,66 @@
+{
+ "job_id": "6561b81eae26",
+ "instance_id": "supply_chain_1m",
+ "source": "live",
+ "state": "cancelled",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789703574.2080436,
+ "solvers": {
+  "ours": {
+   "status": "error",
+   "error": "no result line on stdout",
+   "state": "error"
+  },
+  "highs": {
+   "state": "cancelled",
+   "status": "cancelled"
+  },
+  "gurobi": {
+   "state": "cancelled",
+   "status": "cancelled"
+  }
+ },
+ "objective_match": {
+  "reference": null,
+  "values": {},
+  "rel_error": {}
+ },
+ "speedup": {
+  "vs_highs": null,
+  "vs_gurobi": null
+ },
+ "recorded": {
+  "ours": {
+   "time": 166.91,
+   "objective": 55033635.044940114,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 417.26,
+   "objective": 55042263.251770295,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 299.25,
+   "objective": 55042263.25177029,
+   "status": "optimal"
+  },
+  "source": "scale_20260917-105038.json + measured 20260918"
+ },
+ "gpu_panel": {
+  "device": "Tesla T4",
+  "ours": 9.6335,
+  "highs": 305.7434,
+  "speedup": 31.7,
+  "gurobi": 299.25,
+  "rows": 193442,
+  "cols": 999188,
+  "source": "scale_kaggle_gpu_20260917-081355.json",
+  "note": "prior recorded run on a Kaggle Tesla T4 (4 vCPU) -- not this laptop, not live."
+ },
+ "elapsed": 11.920844316482544
+}

@@ -1,0 +1,147 @@
+{
+ "job_id": "cfb1cadc61d2",
+ "instance_id": "supply_chain_100k",
+ "source": "live",
+ "state": "done",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789725943.024043,
+ "solvers": {
+  "ours": {
+   "instance": "supply_chain_100k",
+   "solver": "ours",
+   "time_limit": 600.0,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.05990620000011404,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 8858352.01769035,
+   "solve_time": 4.8787174000008235,
+   "algorithm": "pdlp + vertex polish",
+   "vertex": true,
+   "iterations": 2496,
+   "restarts": 7,
+   "device": "cpu-fused (12 threads)",
+   "pdlp_seconds": 3.3702133999995567,
+   "polish_seconds": 1.4979811000011978,
+   "stages": [
+    {
+     "pdlp_tol": 1e-05,
+     "pdlp_status": "optimal",
+     "pdlp_iterations": 2496,
+     "pdlp_seconds": 3.3702133999995567,
+     "polish_ok": true,
+     "polish_reason": "certified",
+     "polish_seconds": 1.4979811000011978,
+     "push_steps": 23,
+     "factorizations": 4
+    }
+   ],
+   "rel_gap": 3.154048925312934e-16,
+   "rel_primal_residual": 3.286632271309812e-16,
+   "rel_dual_residual": 1.1413239559197487e-13,
+   "state": "done"
+  },
+  "highs": {
+   "instance": "supply_chain_100k",
+   "solver": "highs",
+   "time_limit": 600.0,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.04202350000014121,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 8858352.01769039,
+   "solve_time": 8.72414949999984,
+   "iterations": 31051,
+   "nodes": 0,
+   "state": "done"
+  },
+  "gurobi": {
+   "instance": "supply_chain_100k",
+   "solver": "gurobi",
+   "time_limit": 600.0,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.0392917999997735,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 8858352.017690398,
+   "solve_time": 1.6359650000013062,
+   "nodes": 0,
+   "version": "13.0.3",
+   "state": "done"
+  }
+ },
+ "objective_match": {
+  "reference": "gurobi",
+  "values": {
+   "ours": 8858352.01769035,
+   "highs": 8858352.01769039,
+   "gurobi": 8858352.017690398
+  },
+  "rel_error": {
+   "ours": 5.4670184457889174e-15,
+   "highs": 8.410797608906028e-16,
+   "gurobi": 0.0
+  }
+ },
+ "speedup": {
+  "vs_highs": 1.78820554353043,
+  "vs_gurobi": 0.3353268627531142
+ },
+ "recorded": {
+  "ours": {
+   "time": 1.85,
+   "objective": 8858352.01769035,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 4.22,
+   "objective": 8858352.01769039,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 1.0,
+   "objective": 8858352.017690398,
+   "status": "optimal"
+  },
+  "source": "measured 20260918, 12 threads each, PDLP 1e-5 + vertex polish"
+ },
+ "gpu_panel": null,
+ "elapsed": 21.44346261024475
+}

@@ -43,7 +43,7 @@ from benchmarks.industrial.supply_chain import build_supply_chain_model
 from benchmarks.instances import NOTES
 # Registry metadata only. The comparison solvers live behind a subprocess (see the demo race
 # endpoints at the bottom of this file); nothing here imports HiGHS or Gurobi.
-from benchmarks.demo_race import DEMO_INSTANCES, SENTINEL as DEMO_SENTINEL, instance_payload
+from benchmarks.demo_race import DEMO_INSTANCES, SENTINEL as DEMO_SENTINEL, engine_env, instance_payload
 
 app = FastAPI(
     title="Sovereign Optimizer API",
@@ -595,9 +595,9 @@ def solve(req: SolveRequest):
 # ============================================================================== demo race
 # A curated head-to-head: our engine vs HiGHS vs Gurobi on four large instances.
 #
-# Each solver runs in its own subprocess (python -m benchmarks.demo_race), one at a time, so
-# HiGHS keeps its single thread while our PDLP gets the whole machine -- matching the recorded
-# benchmark conditions. A job registry plus polling (rather than SSE) keeps a ten-minute run
+# Each solver runs in its own subprocess (python -m benchmarks.demo_race), one at a time, and
+# every subprocess gets the identical environment from engine_env(): the same thread budget for
+# the engine's own parallelism and for every BLAS / OpenMP pool. Only the engine differs. A job registry plus polling (rather than SSE) keeps a ten-minute run
 # alive across a browser reload, which is what the 1M-variable instance needs on stage.
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -646,7 +646,8 @@ def _demo_finalize(job: dict) -> None:
     """Recompute objective agreement and speedups from whatever has finished so far."""
     done = {k: v for k, v in job["solvers"].items()
             if v.get("state") == "done" and v.get("objective") is not None}
-    ref = "highs" if "highs" in done else ("gurobi" if "gurobi" in done else ("ours" if "ours" in done else None))
+    # Gurobi is the reference: commercial-grade accuracy (exact vertex, 1e-6 feasibility).
+    ref = next((k for k in ("gurobi", "highs", "ours") if k in done), None)
     values = {k: v["objective"] for k, v in done.items()}
     errs = {}
     if ref is not None:
@@ -674,7 +675,7 @@ def _demo_spawn(instance_id: str, solver: str, time_limit: Optional[float]):
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
     return subprocess.Popen(cmd, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, env={**os.environ, "PYTHONUNBUFFERED": "1"}, **kwargs)
+                            text=True, env={**os.environ, "PYTHONUNBUFFERED": "1", **engine_env()}, **kwargs)
 
 
 def _demo_parse(stdout: str, stderr: str) -> dict:

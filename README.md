@@ -196,24 +196,28 @@ All mathematical formulations and proofs are documented in depth under [`docs/th
 
 The dashboard's **demo** tab races the engine against **Gurobi** and **HiGHS** on four curated
 instances and shows, side by side, that every solver reaches the same optimum and how long each
-one took. Measured on a 12-core laptop (Windows 11, no GPU); HiGHS and Gurobi pinned to one thread.
+one took. Measured on a 12-core laptop (Windows 11, no GPU). Every engine gets the same
+environment: its own fresh process, the same 12 threads, the same input arrays and the same clock.
+Objectives are compared against Gurobi as the reference; our LP solver runs to a 1e-7 tolerance.
 
-| | instance | size | ours | Gurobi 13 | HiGHS |
-|---|---|---|---:|---:|---:|
-| **A** | production-distribution LP | 19,586 x 99,728, 296k nnz | 2.98 s | 2.86 s | 4.39 s |
-| **B** | same model at 1M variables | 193,442 x 999,188, 2.96M nnz | **166.9 s** | 299.3 s | 417.3 s |
-| **C** | `STCQP1`, Maros-Meszaros QP | 2,052 x 4,097 | 1.17 s | **0.03 s** | 154.0 s |
-| **D** | unit commitment, 480 binaries | 1,228 x 720 | 1.03 s | **0.06 s** | 0.11 s |
+| | instance | size | ours | Gurobi 13 | HiGHS | ours vs Gurobi objective |
+|---|---|---|---:|---:|---:|---:|
+| **A** | production-distribution LP | 19,586 x 99,728, 296k nnz | 5.11 s | **1.18 s** | 4.37 s | 1.7e-7 |
+| **B** | same model at 1M variables | 193,442 x 999,188, 2.96M nnz | 125.0 s | **42.7 s** | 766.2 s | 1.6e-7 |
+| **C** | `STCQP1`, Maros-Meszaros QP | 2,052 x 4,097 | 1.07 s | **0.02 s** | 134.8 s | 2e-10 |
+| **D** | unit commitment, 480 binaries | 1,228 x 720 | 1.02 s | **0.06 s** | 0.08 s | exact |
 
-Read honestly: **B is the result that matters** -- at a million variables the sovereign PDLP
-solver is 1.8x faster than Gurobi and 2.5x faster than HiGHS on the same machine, to the same
-optimum. On A we are level with Gurobi. On the small QP and the MILP, Gurobi is still well
-ahead; the objectives are identical and ours carries an independent optimality certificate, but
-the QP interior point and the branch-and-cut tree are not yet tuned to commercial standards.
-That gap is the roadmap, and the demo states it rather than hiding it.
+Read honestly: with every engine on 12 threads, Gurobi is fastest on all four. At a million
+variables the sovereign LP solver (restarted reflected Halpern PDHG on fused multi-threaded
+kernels) is 6x faster than HiGHS and agrees with Gurobi's optimum to seven significant digits;
+Gurobi's parallel barrier is still about 3x faster on this CPU. On the small QP and the MILP the
+objectives are identical and ours carries an independent optimality certificate, but the QP
+interior point and the branch-and-cut tree are not yet tuned to commercial standards. That gap
+is the roadmap, and the demo states it rather than hiding it.
 
-On a Tesla T4 (recorded on Kaggle, not live) instance B solves in **9.6 s** -- 31x faster than
-both references -- through the same PDLP code with the Torch CUDA backend swapped in.
+On a Tesla T4 (recorded on Kaggle, not live) instance B solved in **9.6 s** with the earlier PDLP
+at tolerance 1e-4 through the Torch CUDA backend -- faster than Gurobi's 42.7 s on this laptop.
+That run predates the Halpern solver and has not been repeated at 1e-7.
 
 ### Running it
 

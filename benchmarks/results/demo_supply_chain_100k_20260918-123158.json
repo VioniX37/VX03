@@ -1,0 +1,131 @@
+{
+ "job_id": "c384e4b68ad7",
+ "instance_id": "supply_chain_100k",
+ "source": "live",
+ "state": "done",
+ "order": [
+  "ours",
+  "highs",
+  "gurobi"
+ ],
+ "started_at": 1789714901.3304417,
+ "solvers": {
+  "ours": {
+   "instance": "supply_chain_100k",
+   "solver": "ours",
+   "time_limit": 600.0,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.03872629999386845,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 8858350.506426075,
+   "solve_time": 6.884537799996906,
+   "algorithm": "pdlp",
+   "iterations": 7040,
+   "restarts": 11,
+   "device": "cpu-fused (12 threads)",
+   "rel_gap": 7.976921989288962e-08,
+   "rel_primal_residual": 2.488267672971522e-08,
+   "rel_dual_residual": 3.005824274283223e-08,
+   "state": "done"
+  },
+  "highs": {
+   "instance": "supply_chain_100k",
+   "solver": "highs",
+   "time_limit": 600.0,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.034033200005069375,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 8858352.01769039,
+   "solve_time": 5.053770699996676,
+   "iterations": 31051,
+   "nodes": 0,
+   "state": "done"
+  },
+  "gurobi": {
+   "instance": "supply_chain_100k",
+   "solver": "gurobi",
+   "time_limit": 600.0,
+   "rows": 19586,
+   "cols": 99728,
+   "nnz": 295596,
+   "threads": 12,
+   "thread_env": {
+    "OMP_NUM_THREADS": "12",
+    "MKL_NUM_THREADS": "12",
+    "OPENBLAS_NUM_THREADS": "12",
+    "NUMEXPR_NUM_THREADS": "12",
+    "VECLIB_MAXIMUM_THREADS": "12",
+    "NUMBA_NUM_THREADS": "12"
+   },
+   "build_time": 0.03810059999523219,
+   "int_vars": 0,
+   "status": "optimal",
+   "objective": 8858352.017690398,
+   "solve_time": 1.319328499994299,
+   "nodes": 0,
+   "version": "13.0.3",
+   "state": "done"
+  }
+ },
+ "objective_match": {
+  "reference": "gurobi",
+  "values": {
+   "ours": 8858350.506426075,
+   "highs": 8858352.01769039,
+   "gurobi": 8858352.017690398
+  },
+  "rel_error": {
+   "ours": 1.706033265902672e-07,
+   "highs": 8.410797608906028e-16,
+   "gurobi": 0.0
+  }
+ },
+ "speedup": {
+  "vs_highs": 0.7340755250118529,
+  "vs_gurobi": 0.19163646686563213
+ },
+ "recorded": {
+  "ours": {
+   "time": 5.11,
+   "objective": 8858350.506426075,
+   "status": "optimal"
+  },
+  "highs": {
+   "time": 4.37,
+   "objective": 8858352.01769039,
+   "status": "optimal"
+  },
+  "gurobi": {
+   "time": 1.18,
+   "objective": 8858352.017690398,
+   "status": "optimal"
+  },
+  "source": "measured 20260918, 12 threads each, PDLP tol 1e-7"
+ },
+ "gpu_panel": null,
+ "elapsed": 17.65844988822937
+}
