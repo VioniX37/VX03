@@ -1,88 +1,66 @@
-# Contributing to Sovereign Optimizer
+# Contributing
 
-Thank you for your interest in contributing to the **Sovereign Mathematical Optimization Engine**! This project is maintained by **VioniX and its contributors**.
+Thank you for your interest in the VioniX Sovereign Optimization Engine. Bug reports, benchmark
+results, documentation fixes and pull requests are all welcome.
 
----
+## Licensing of contributions
 
-## 1. Code of Conduct & Copyright Assignment
+This project is released under the [PolyForm Strict License 1.0.0](LICENSE), which does not permit
+redistribution or modified versions outside this repository. Contributions are therefore made
+**to VioniX**:
 
-All contributors are expected to uphold our [Code of Conduct](CODE_OF_CONDUCT.md). 
+By opening a pull request or submitting a patch, you confirm that you wrote the contribution (or have
+the right to submit it), and you grant VioniX a perpetual, worldwide, royalty-free, irrevocable licence
+to use, modify, relicense and distribute your contribution as part of this project. You keep the
+copyright in your own work.
 
-### Copyright & Rights Notice
-By submitting a Pull Request, patch, or documentation to this repository, you agree that your contributions will be licensed under the project's [MIT License](LICENSE), and that copyright and licensing rights remain held by **VioniX and its contributors**.
+Forking on GitHub to prepare a pull request is fine. Publishing or distributing a modified version
+elsewhere is not permitted by the licence.
 
----
+## Design principles
 
-## 2. Architectural Principles
+1. **No solver black boxes.** The engine (`sovereign_opt/`) must never import Gurobi, CPLEX, Xpress,
+   SCIP, HiGHS, GLPK or any other solver. They may appear only in `benchmarks/` and `Gurobi files/` as
+   external references. `tests/test_benchmarks.py::test_engine_never_imports_comparison_solvers`
+   enforces this.
+2. **The strategy engine is advisory.** It may choose a method or a setting; it must never change
+   tolerances or certify a result.
+3. **Every answer is verifiable.** Results must pass the independent validator, which recomputes
+   everything from the raw model and never trusts solver-internal state.
+4. **Honest statuses.** An iteration limit is not "optimal" and a heuristic point is not "proven".
 
-Before writing code, review the core philosophical tenets of the engine:
+## Development setup
 
-1. **Mathematical Sovereignty**: Never introduce dependencies on commercial or external open-source solver blackboxes (e.g., Gurobi, CPLEX, SCIP, HiGHS, GLPK). All optimization algorithms (Simplex, Interior Point, Branch & Bound, Active Set QP) must be implemented natively from foundational numerical linear algebra.
-2. **First-Principles Correctness**: ML components are strictly **advisory** (heuristic selection, branching variable scores). ML must never have the authority to alter constraint tolerances or certify optimality.
-3. **Independent Trust**: Every solution must be verifiable through an independent zero-trust mathematical audit without internal solver basis reuse.
-4. **Clean Code & Type Annotations**: All Python modules must use strict type hints (`typing`), docstrings explaining mathematical formulations, and pass automated testing.
-
----
-
-## 3. Development Setup
-
-### Python Environment
 ```bash
-# Clone the repository
-git clone https://github.com/vionix/sovereign-opt.git
-cd sovereign-opt
-
-# Create virtual environment
+git clone https://github.com/VioniX37/VX03.git
+cd VX03
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # macOS / Linux
 pip install -r requirements.txt
-pip install pytest pytest-cov ruff mypy
-```
 
-### Next.js Frontend
-```bash
 cd frontend
 npm install
 npm run dev
 ```
 
----
+## Before opening a pull request
 
-## 4. Testing & Verification Requirements
+- `python -m pytest -q tests/` passes.
+- `cd frontend && npm run build` succeeds if you touched the dashboard.
+- New or changed numerical methods are documented in `docs/theory/`.
+- Performance claims are backed by a saved run in `benchmarks/results/` (for example from
+  `python -m benchmarks.compare --suite <suite>`), including cases where the change is slower.
 
-Every pull request must satisfy the following criteria:
+## Pull request flow
 
-1. **Automated Test Suite**:
-   ```bash
-   python -m pytest -v tests/
-   ```
-   All tests must pass 100% with execution time under 2.0 seconds on standard hardware.
+1. Branch from `main`: `git checkout -b feature/short-description`
+2. Write clear commit messages, for example `fix(simplex): refactorize before declaring optimality`.
+3. Open a pull request against `main` and fill in the template.
+4. Make sure CI is green.
 
-2. **Frontend Build Verification**:
-   ```bash
-   cd frontend
-   npm run build
-   ```
-   Must compile cleanly under TypeScript and Turbopack with zero lint or build errors.
+## Reporting bugs
 
-3. **Mathematical Documentation**:
-   Any new algorithm or modification to numerical linear algebra (e.g., matrix scaling, presolve reduction) must be documented in `docs/theory/`.
-
----
-
-## 5. Submitting a Pull Request
-
-1. Create a feature branch from `main`:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-2. Commit your changes with clear, descriptive messages:
-   ```bash
-   git commit -m "feat(simplex): implement Harris ratio test for anti-degeneracy"
-   ```
-3. Push to your branch and open a Pull Request against `main`.
-4. Ensure all CI checks pass.
-
-Thank you for helping build a truly sovereign, open mathematical computing foundation!
+Open an issue with the model file (`.mps` / `.lp`) or a script that builds the model, the algorithm you
+selected, the output you got and the output you expected. For security issues, follow
+[SECURITY.md](SECURITY.md) instead of opening a public issue.

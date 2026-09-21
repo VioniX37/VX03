@@ -6,7 +6,7 @@ The Sovereign Optimizer couples rigorous mathematical algorithms with an adaptiv
 
 ---
 
-## 1. Feature Representation (28 Structural Dimensions)
+## 1. Feature Representation (23 Structural Dimensions)
 
 The ML Strategy Engine operates entirely on mathematical and graph-structural features extracted from both the raw input model and the post-presolve model. It does not inspect variable names, semantics, or problem text.
 
@@ -37,10 +37,13 @@ The ML Strategy Engine operates entirely on mathematical and graph-structural fe
   $$\text{Score}(x_j) = 2 \min(\text{frac}_j, 1 - \text{frac}_j) \cdot \ln(1 + |c_j|) \cdot \frac{1 + 0.1 \cdot \text{deg}(j)}{1 + 0.05 \cdot \text{depth}}$$
   ranking variables by expected dual bound improvement.
 
-### 2.3 Model 3: Hardware Dispatcher (CPU vs GPU)
+### 2.3 Model 3: Hardware Recommendation (CPU vs GPU)
 - Assesses whether SpMV acceleration on GPU offsets host-to-device memory transfer latency:
   $$T_{\text{transfer}} + T_{\text{GPU}} < T_{\text{CPU}}$$
-- Automatically dispatches to GPU only when $\text{nnz} \ge 25,000$ and density warrants parallel SIMD matrix-vector execution.
+- Recommends GPU when $\text{nnz} \ge 25,000$ and density exceeds 2%. This recommendation is advisory and
+  reported to the user; it does not route the solve. The GPU path that runs today is PDLP, which uses
+  PyTorch CUDA automatically whenever a CUDA device is present and otherwise runs on fused multi-threaded
+  CPU kernels. The simplex, interior point and branch-and-bound solvers run on CPU.
 
 ---
 

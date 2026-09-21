@@ -1,6 +1,6 @@
 """
 Structural feature extraction for the ML Strategy Engine.
-Computes a normalized 28-dimensional feature vector from raw and presolved models.
+Computes a normalized 23-dimensional feature vector from raw and presolved models.
 """
 from typing import Dict, List, Optional
 import numpy as np

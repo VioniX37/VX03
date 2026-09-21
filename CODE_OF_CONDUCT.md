@@ -28,6 +28,10 @@ Examples of unacceptable behavior include:
 
 Community leaders are responsible for clarifying and enforcing our standards of acceptable behavior and will take appropriate and fair corrective action in response to any behavior that they deem inappropriate, threatening, offensive, or harmful.
 
+## Reporting
+
+Report unacceptable behavior privately to the VioniX maintainers through [GitHub](https://github.com/VioniX37). All reports will be reviewed promptly and handled confidentially.
+
 ## Scope
 
 This Code of Conduct applies within all community spaces, including GitHub repositories, issue trackers, and pull requests, and also applies when an individual is officially representing the community in public spaces.
