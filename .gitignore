@@ -126,3 +126,13 @@ benchmarks/data/
 # benchmarks/demo_race.py reads it from "Gurobi files/gurobi.lic" at run time.
 *.lic
 gurobi.lic
+
+# --- AI assistant / local tooling files (keep local, never publish) ---
+.claude/
+CLAUDE.md
+**/CLAUDE.md
+AGENTS.md
+**/AGENTS.md
+
+# --- Generated exports (recreate with tools/export_supply_chain_variables.py) ---
+exports/

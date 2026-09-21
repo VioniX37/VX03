@@ -7,6 +7,7 @@ Please provide a brief overview of the changes introduced in this PR.
 - [ ] Pytest test suite passes 100% (`python -m pytest -v tests/`).
 - [ ] Next.js frontend builds cleanly (`cd frontend && npm run build`).
 - [ ] Mathematical documentation updated in `docs/theory/` if applicable.
+- [ ] I agree that this contribution is licensed to VioniX as described in [CONTRIBUTING.md](../CONTRIBUTING.md#licensing-of-contributions).
 
 ## Types of Changes
 - [ ] Bug fix (non-breaking change which fixes an issue)

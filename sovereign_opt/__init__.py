@@ -6,4 +6,4 @@ Developed from mathematical foundations without third-party solver wrappers.
 """
 
 __version__ = "2.0.0"
-__author__ = "Sovereign Optimizer Core Team"
+__author__ = "VioniX"
