@@ -8,3 +8,5 @@ rich>=13.7.0
 pytest>=8.0.0
 python-multipart>=0.0.9
 numba>=0.59.0
+highspy>=1.7.0
+gurobipy>=12.0 
